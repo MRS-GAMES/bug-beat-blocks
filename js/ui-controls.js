@@ -93,7 +93,7 @@ function changeScreen(state, options = {}) {
         if (state === 'GAMEOVER') {
             rankingStatus.innerText = result.score >= MIN_RANKING_SCORE
                 ? 'リトライまたはタイトルに戻る時にランキング登録できます'
-                : `ランキングは${formatGameScore(MIN_RANKING_SCORE)}点以上から`;
+                : `${formatGameScore(MIN_RANKING_SCORE)}点以上でランキング登録できます`;
         }
         document.getElementById('overlay-action-btn').innerText = state === 'GAMEOVER'
             ? 'RETRY'
