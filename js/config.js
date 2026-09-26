@@ -174,6 +174,7 @@ const LEVEL_CONFIG = {
 const MAX_SELECTABLE_LEVEL = 30;
 const MAX_PLAYABLE_LEVEL = 50;
 const MAX_LEVEL = MAX_PLAYABLE_LEVEL;
+const MIN_RANKING_SCORE = 5000;
 const ENDLESS_GUARANTEED = ['white', 'color', 'metal', 'metal', 'egg', 'egg', 'egg', 'batWhite', 'batColor', 'batMetal'];
 const ENDLESS_RANDOM_POOL = ['white', 'color', 'metal', 'egg', 'batWhite', 'batColor', 'batMetal'];
 

@@ -133,11 +133,24 @@
         }
 
         .title-howto-btn {
-            width: 68%;
-            max-width: 220px;
             padding: 10px 18px;
             font-family: 'Noto Sans JP', sans-serif;
             font-size: 15px;
+        }
+
+        .title-sub-actions {
+            width: 82%;
+            max-width: 260px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .title-sub-actions .btn {
+            width: 100%;
+            margin: 6px 0;
+            padding: 10px 6px;
+            font-size: 14px;
         }
 
         #how-to-screen {
@@ -308,6 +321,229 @@
             touch-action: pan-y;
         }
 
+        #ranking-screen,
+        #player-name-screen {
+            justify-content: flex-start;
+            background: rgba(36,20,84,0.97);
+            overflow: hidden;
+        }
+
+        .ranking-title { margin-bottom: 8px !important; }
+
+        .ranking-player-card {
+            width: 100%;
+            max-width: 360px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            border: 2px solid var(--ink);
+            border-radius: 14px;
+            background: var(--paper);
+            color: var(--ink);
+            font-family: 'Fredoka', sans-serif;
+            font-weight: 700;
+        }
+
+        #ranking-player-name {
+            min-width: 92px;
+            padding: 6px 10px;
+            border: 2px solid var(--ink);
+            border-radius: 10px;
+            background: var(--yellow);
+            color: var(--ink);
+            font: inherit;
+        }
+
+        #ranking-player-name.unregistered { font-size: 12px; }
+
+        .ranking-month {
+            margin: 7px 0;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .ranking-tabs {
+            width: 100%;
+            max-width: 360px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-bottom: 7px;
+        }
+
+        .ranking-tab {
+            padding: 8px 4px;
+            border: 2px solid rgba(255,255,255,0.6);
+            border-radius: 12px;
+            background: rgba(255,255,255,0.14);
+            color: #fff;
+            font-family: 'Fredoka', sans-serif;
+            font-weight: 700;
+        }
+
+        .ranking-tab.active {
+            border-color: var(--ink);
+            background: var(--mint);
+            color: var(--ink);
+        }
+
+        .ranking-table-wrap {
+            width: 100%;
+            max-width: 360px;
+            min-height: 0;
+            flex: 1 1 0;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+            border: 3px solid var(--ink);
+            border-radius: 14px;
+            background: var(--paper);
+        }
+
+        .ranking-table-wrap * { touch-action: pan-y; }
+
+        .ranking-table-head,
+        .ranking-row {
+            display: grid;
+            grid-template-columns: 48px minmax(58px, 1fr) 58px 82px;
+            align-items: center;
+            gap: 3px;
+            padding: 7px 6px;
+            color: var(--ink);
+            font-family: 'Nunito', 'Noto Sans JP', sans-serif;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .ranking-table-head {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: #ded5f6;
+            font-size: 10px;
+            font-weight: 800;
+        }
+
+        .ranking-row { border-top: 1px solid #ded5f6; }
+        .ranking-row.own { background: #fff0a8; }
+
+        .ranking-message {
+            padding: 24px 8px;
+            color: #7d6aab;
+            font-size: 13px;
+            font-weight: 800;
+            text-align: center;
+        }
+
+        .ranking-own-row {
+            width: 100%;
+            max-width: 360px;
+            margin-top: 6px;
+            border: 2px solid var(--yellow);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        #ranking-screen > .btn {
+            flex-shrink: 0;
+            padding: 9px 18px;
+            margin-top: 7px;
+        }
+
+        .player-name-card {
+            width: 100%;
+            max-width: 330px;
+            padding: 18px;
+            border: 3px solid var(--ink);
+            border-radius: 18px;
+            background: var(--paper);
+            color: var(--ink);
+            text-align: center;
+        }
+
+        .player-name-card p {
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .player-name-card .player-name-prompt {
+            margin-bottom: 12px;
+            padding: 8px;
+            border-radius: 9px;
+            background: rgba(112, 214, 255, 0.35);
+            font-size: 14px;
+        }
+
+        #player-name-input {
+            width: 100%;
+            margin: 14px 0 8px;
+            padding: 10px;
+            border: 3px solid var(--ink);
+            border-radius: 12px;
+            background: #fff;
+            color: var(--ink);
+            font-family: 'Fredoka', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 6px;
+            text-align: center;
+            text-transform: uppercase;
+            touch-action: manipulation;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        .player-name-error {
+            min-height: 20px;
+            color: #d83264;
+        }
+
+        .player-name-notice {
+            color: #756590;
+            font-size: 11px !important;
+            line-height: 1.5;
+        }
+
+        .player-name-suggestions {
+            display: flex;
+            justify-content: center;
+            gap: 7px;
+            margin-top: 7px;
+        }
+
+        .player-name-suggestions button {
+            padding: 7px 9px;
+            border: 2px solid var(--ink);
+            border-radius: 9px;
+            background: var(--sky);
+            color: var(--ink);
+            font-family: 'Fredoka', sans-serif;
+            font-weight: 700;
+        }
+
+        .player-name-actions {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .player-name-actions.result-entry-actions {
+            max-width: 360px;
+            flex-direction: row;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .player-name-actions.result-entry-actions .btn {
+            width: calc(50% - 4px);
+            margin: 8px 0;
+            padding: 12px 8px;
+            font-size: 13px;
+        }
+
         #level-screen .section-title,
         #level-screen .level-grid,
         #level-screen .btn {
@@ -353,6 +589,50 @@
         }
 
         #overlay-screen, #pause-screen, #log-screen { background: rgba(36,20,84,0.95); }
+
+        .result-card {
+            width: 82%;
+            max-width: 280px;
+            padding: 14px 18px;
+            margin: 10px 0 14px;
+            border: 3px solid var(--ink);
+            border-radius: 18px;
+            background: var(--paper);
+            box-shadow: 0 5px 0 var(--ink);
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--ink);
+            font-family: 'Fredoka', 'Noto Sans JP', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            line-height: 1.8;
+        }
+
+        .result-row strong {
+            color: #7139cb;
+            font-size: 20px;
+        }
+
+        .result-record-badge {
+            margin-top: 6px;
+            color: #e83e73;
+            font-family: 'Fredoka', sans-serif;
+            font-size: 17px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .result-ranking-status {
+            margin-top: 6px;
+            color: var(--ink);
+            font-size: 12px;
+            font-weight: 800;
+            text-align: center;
+        }
 
         #log-container {
             width: 90%;

@@ -17,7 +17,10 @@
         <img class="badge" src="assets/images/title-illustration.png" alt="" draggable="false">
         <h1 class="title">BUG BEAT<br>BLOCKS</h1>
         <button class="btn" id="start-btn">LEVEL SELECT</button>
-        <button class="btn secondary title-howto-btn" id="how-to-btn">あそび方</button>
+        <div class="title-sub-actions">
+            <button class="btn sky" id="ranking-btn">RANKING</button>
+            <button class="btn secondary title-howto-btn" id="how-to-btn">あそび方</button>
+        </div>
         <a class="mrs-games-link" href="https://mrs-games.pages.dev/">MRS GAMES</a>
     </div>
 
@@ -72,11 +75,61 @@
         <button class="btn secondary" id="back-title-btn">TITLEに戻る</button>
     </div>
 
+    <!-- 月間ランキング画面 -->
+    <div id="ranking-screen" class="screen hidden">
+        <h1 class="section-title ranking-title">MONTHLY RANKING</h1>
+        <div class="ranking-player-card">
+            <span>PLAYER</span>
+            <button id="ranking-player-name" type="button">名前を登録</button>
+        </div>
+        <p id="ranking-month" class="ranking-month"></p>
+        <div class="ranking-tabs">
+            <button id="ranking-score-tab" class="ranking-tab active" type="button">HIGH SCORE</button>
+            <button id="ranking-level-tab" class="ranking-tab" type="button">LEVEL</button>
+        </div>
+        <div class="ranking-table-wrap">
+            <div class="ranking-table-head">
+                <span>RANK</span><span>NAME</span><span>LEVEL</span><span>SCORE</span>
+            </div>
+            <div id="ranking-list" class="ranking-list"></div>
+            <p id="ranking-message" class="ranking-message">読み込み中...</p>
+        </div>
+        <div id="ranking-own-row" class="ranking-own-row hidden"></div>
+        <button class="btn sky hidden" id="ranking-retry-btn">再読み込み</button>
+        <button class="btn secondary" id="ranking-back-btn">タイトルに戻る</button>
+    </div>
+
+    <!-- プレイヤー名入力画面 -->
+    <div id="player-name-screen" class="screen hidden">
+        <h1 class="section-title" id="player-name-title">PLAYER NAME</h1>
+        <div class="player-name-card">
+            <p id="player-name-prompt" class="player-name-prompt hidden"></p>
+            <p>英大文字・数字で1〜5文字</p>
+            <input id="player-name-input" type="text" maxlength="5" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="プレイヤー名">
+            <p class="player-name-notice">登録名と記録は月間ランキングで公開されます。</p>
+            <p id="player-name-error" class="player-name-error"></p>
+            <div id="player-name-suggestions" class="player-name-suggestions"></div>
+        </div>
+        <div id="player-name-actions" class="player-name-actions">
+            <button class="btn mint" id="player-name-save-btn">この名前にする</button>
+            <button class="btn secondary" id="player-name-cancel-btn">戻る</button>
+        </div>
+    </div>
+
     <!-- ゲームオーバー／クリア画面 -->
     <div id="overlay-screen" class="screen hidden">
         <h1 class="title" id="overlay-title" style="font-size:28px;">TRY AGAIN?</h1>
-        <p class="subtitle" id="overlay-sub" style="font-family:'Fredoka',sans-serif;font-size:18px;">SCORE 0</p>
+        <div id="result-card" class="result-card">
+            <div class="result-row"><span>LEVEL</span><strong id="result-level">1</strong></div>
+            <div class="result-row"><span>SCORE</span><strong id="result-score">0</strong></div>
+            <div id="result-best-row" class="result-row hidden"><span>BEST</span><strong id="result-best-score">0</strong></div>
+            <p id="result-record-badge" class="result-record-badge hidden">NEW RECORD!</p>
+            <p id="result-ranking-status" class="result-ranking-status hidden"></p>
+        </div>
+        <p class="subtitle hidden" id="overlay-sub">SCORE 0</p>
+        <button class="btn sky hidden" id="share-result-btn">結果を共有</button>
         <button class="btn coral" id="overlay-action-btn">RETRY</button>
+        <button class="btn secondary hidden" id="overlay-title-btn">タイトルに戻る</button>
     </div>
 
     <!-- ポーズ画面 -->
@@ -84,7 +137,6 @@
         <h1 class="title" style="font-size:28px; margin-bottom: 12px;">PAUSE</h1>
         <button class="btn mint" id="resume-btn">つづける</button>
         <button class="btn sky" id="pause-retry-btn">やり直す</button>
-        <button class="btn pink" id="open-log-btn">開発ログ確認</button>
         <button class="btn secondary" id="pause-title-btn">タイトルに戻る</button>
     </div>
 
@@ -148,6 +200,8 @@
 </div>
 
 <script src="js/config.js"></script>
+<script src="js/player-data.js"></script>
+<script src="js/ranking.js"></script>
 <script src="js/ui-controls.js"></script>
 <script src="js/game.js"></script>
 <script src="js/render.js"></script>

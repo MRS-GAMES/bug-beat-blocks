@@ -72,10 +72,14 @@ function load(relativePath) {
 }
 
 load('js/config.js');
+load('js/player-data.js');
 vm.runInContext(`
     var setupCalls = [];
     function setupStage(level) { setupCalls.push(level); }
     function checkCollisionAt() { return false; }
+    function submitCurrentRankingResult() {}
+    function startOnlinePlay() {}
+    function refreshRankingScreen() {}
 `, sandbox);
 load('js/ui-controls.js');
 
