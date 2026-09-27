@@ -63,8 +63,9 @@ async function main() {
     const moduleUrl = `${pathToFileURL(path.join(root, 'functions/api/[[path]].js')).href}?test=${Date.now()}`;
     const { onRequest } = await import(moduleUrl);
     const db = new D1Mock();
+    const ipHashSalt = 'test-only-ip-hash-salt-32-characters-minimum';
 
-    async function api(route, { method = 'GET', body, deviceIp = '192.0.2.1' } = {}) {
+    async function api(route, { method = 'GET', body, deviceIp = '192.0.2.1', includeIpHashSalt = true } = {}) {
         const request = new Request(`https://example.com/api/${route}`, {
             method,
             headers: {
@@ -75,11 +76,22 @@ async function main() {
         });
         const response = await onRequest({
             request,
-            env: { RANKINGS_DB: db },
+            env: {
+                RANKINGS_DB: db,
+                ...(includeIpHashSalt ? { IP_HASH_SALT: ipHashSalt } : {})
+            },
             params: { path: route.split('?')[0].split('/') }
         });
         return { status: response.status, data: await response.json() };
     }
+
+    let response = await api('play/start', {
+        method: 'POST',
+        body: { deviceId: 'device-no-secret' },
+        includeIpHashSalt: false
+    });
+    assert.equal(response.status, 503);
+    assert.equal(response.data.code, 'SECURITY_NOT_CONFIGURED');
 
     const device1 = 'device-00000001';
     const device2 = 'device-00000002';
@@ -97,9 +109,29 @@ async function main() {
     assert.equal(anonymousResult.status, 409);
     assert.equal(anonymousResult.data.code, 'NAME_REQUIRED');
 
-    let response = await api('player-name', { method: 'POST', body: { deviceId: device1, playerName: 'mrs1' } });
+    response = await api('player-name', { method: 'POST', body: { deviceId: device1, playerName: 'mrs1' } });
     assert.equal(response.status, 200);
     assert.equal(response.data.playerName, 'MRS1');
+
+    const storedPlayer = db.database.prepare(
+        'SELECT claim_ip_hash FROM monthly_players WHERE player_name = ?'
+    ).get('MRS1');
+    const encoder = new TextEncoder();
+    const hmacKey = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(ipHashSalt),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+    );
+    const expectedIpHash = Buffer.from(
+        await crypto.subtle.sign('HMAC', hmacKey, encoder.encode('192.0.2.1'))
+    ).toString('hex');
+    const plainIpHash = Buffer.from(
+        await crypto.subtle.digest('SHA-256', encoder.encode('192.0.2.1'))
+    ).toString('hex');
+    assert.equal(storedPlayer.claim_ip_hash, expectedIpHash);
+    assert.notEqual(storedPlayer.claim_ip_hash, plainIpHash);
 
     response = await api('player-name', { method: 'POST', body: { deviceId: device2, playerName: 'MRS1' } });
     assert.equal(response.status, 409);
