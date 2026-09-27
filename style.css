@@ -133,6 +133,9 @@
         }
 
         .title-howto-btn {
+            width: 82%;
+            max-width: 260px;
+            margin: 6px 0;
             padding: 10px 18px;
             font-family: 'Noto Sans JP', sans-serif;
             font-size: 15px;
@@ -588,7 +591,19 @@
             box-shadow: none;
         }
 
+        #best-score-screen,
         #overlay-screen, #pause-screen, #log-screen { background: rgba(36,20,84,0.95); }
+
+        .best-score-card {
+            margin-top: 18px;
+        }
+
+        .best-score-note {
+            margin-bottom: 12px;
+            color: rgba(255,255,255,0.82);
+            font-size: 12px;
+            font-weight: 700;
+        }
 
         #overlay-title.final-clear-title {
             max-width: 94%;
