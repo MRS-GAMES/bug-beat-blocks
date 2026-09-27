@@ -3,6 +3,7 @@ const JSON_HEADERS = {
     'Cache-Control': 'no-store'
 };
 const MIN_RANKING_SCORE = 5000;
+const MAX_RANKING_LEVEL = 100;
 
 function json(data, status = 200) {
     return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
@@ -258,7 +259,7 @@ async function handleRecords(context) {
     if (!body || !validateDeviceId(body.deviceId) || typeof body.playToken !== 'string') {
         return json({ code: 'INVALID_REQUEST' }, 400);
     }
-    if (!Number.isInteger(score) || score < 0 || score > 1000000000 || !Number.isInteger(level) || level < 1 || level > 50) {
+    if (!Number.isInteger(score) || score < 0 || score > 1000000000 || !Number.isInteger(level) || level < 1 || level > MAX_RANKING_LEVEL) {
         return json({ code: 'INVALID_RESULT', message: '記録の値が不正です' }, 400);
     }
     if (score < MIN_RANKING_SCORE) {

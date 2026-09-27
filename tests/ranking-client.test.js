@@ -51,7 +51,7 @@ const sandbox = {
     Math,
     Promise,
     URLSearchParams,
-    MAX_PLAYABLE_LEVEL: 50,
+    MAX_PLAYABLE_LEVEL: 100,
     MIN_RANKING_SCORE: 5000,
     window: {
         localStorage: {

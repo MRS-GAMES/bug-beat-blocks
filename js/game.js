@@ -111,7 +111,8 @@ function isBatBugType(bugType) {
 function createEnemyPlacements(enemyTypes, level) {
     if (level >= 29) {
         const randomSlots = [];
-        for (let y = 6; y < ROWS; y++) {
+        const minPlacementRow = getEndlessPlacementMinRow(level);
+        for (let y = minPlacementRow; y < ROWS; y++) {
             for (let x = 0; x < COLS; x++) randomSlots.push({ x, y });
         }
         const shuffledSlots = shuffleArray(randomSlots).slice(0, enemyTypes.length);

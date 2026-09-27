@@ -71,8 +71,15 @@ function changeScreen(state, options = {}) {
         }
         document.getElementById('overlay-screen').classList.remove('hidden');
         document.getElementById('game-header').classList.remove('hidden');
-        document.getElementById('overlay-title').innerText = state === 'GAMEOVER' ? 'TRY AGAIN?' : 'CLEAR!';
         const isFinalLevelClear = state === 'STAGECLEAR' && getNextLevel(selectedLevel) === null;
+        const overlayTitle = document.getElementById('overlay-title');
+        overlayTitle.innerText = state === 'GAMEOVER'
+            ? 'TRY AGAIN?'
+            : (isFinalLevelClear ? 'Congratulations!' : 'CLEAR!');
+        overlayTitle.classList.toggle('final-clear-title', isFinalLevelClear);
+        const overlaySub = document.getElementById('overlay-sub');
+        overlaySub.innerText = isFinalLevelClear ? 'ALL 100 LEVELS CLEARED!' : '';
+        overlaySub.classList.toggle('hidden', !isFinalLevelClear);
         const isFinalResult = state === 'GAMEOVER' || isFinalLevelClear;
         const result = options.result || (isFinalResult ? recordLocalResult(score, selectedLevel) : {
             score,
@@ -100,12 +107,6 @@ function changeScreen(state, options = {}) {
             : (isFinalLevelClear ? 'LEVEL SELECT' : 'NEXT STAGE');
         document.getElementById('overlay-action-btn').className = state === 'GAMEOVER' ? 'btn coral' : 'btn mint';
         document.getElementById('overlay-title-btn').classList.toggle('hidden', state !== 'GAMEOVER');
-        if (isFinalLevelClear && result.score >= MIN_RANKING_SCORE && !options.skipRankingPrompt) {
-            setTimeout(() => openRankingResultNameScreen(result, {
-                onComplete: () => changeScreen(state, { skipRankingPrompt: true, result }),
-                onCancel: () => changeScreen(state, { skipRankingPrompt: true, result })
-            }), 0);
-        }
     }
 }
 
@@ -205,7 +206,7 @@ function registerCurrentRunBefore(onComplete) {
     });
 }
 
-function continueGameOverAfterRanking(onComplete) {
+function continueResultAfterRanking(onComplete) {
     const result = window.currentGameResult;
     if (!result || result.score < MIN_RANKING_SCORE || result.rankingFinalized) {
         onComplete();
@@ -219,11 +220,11 @@ function continueGameOverAfterRanking(onComplete) {
 
 document.getElementById('overlay-action-btn').onclick = () => {
     if (gameState === 'GAMEOVER') {
-        continueGameOverAfterRanking(restartCurrentLevel);
+        continueResultAfterRanking(restartCurrentLevel);
     } else if (gameState === 'STAGECLEAR') {
         const nextLevel = getNextLevel(selectedLevel);
         if (nextLevel === null) {
-            changeScreen('LEVEL_SELECT');
+            continueResultAfterRanking(() => changeScreen('LEVEL_SELECT'));
             return;
         }
         selectedLevel = nextLevel;
@@ -235,7 +236,7 @@ document.getElementById('overlay-action-btn').onclick = () => {
 
 document.getElementById('overlay-title-btn').onclick = () => {
     if (gameState !== 'GAMEOVER') return;
-    continueGameOverAfterRanking(returnToTitleFromPlay);
+    continueResultAfterRanking(returnToTitleFromPlay);
 };
 
 document.getElementById('share-result-btn').onclick = async () => {

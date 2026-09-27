@@ -11,7 +11,7 @@ const sandbox = {
     Intl,
     Date,
     Math,
-    MAX_PLAYABLE_LEVEL: 50,
+    MAX_PLAYABLE_LEVEL: 100,
     window: {
         localStorage: {
             getItem: key => storage.has(key) ? storage.get(key) : null,
@@ -52,6 +52,10 @@ vm.runInContext(`
     assert.equal(split.isNewLevel, false);
     assert.equal(split.bestScore, 1500);
     assert.equal(split.bestLevel, 8);
+
+    const capped = recordLocalResult(1600, 101);
+    assert.equal(capped.level, 100);
+    assert.equal(capped.bestLevel, 100);
 
     saveRegisteredPlayerName('MRS1', getJstMonthKey());
     assert.equal(getCurrentPlayerName(), 'MRS1');

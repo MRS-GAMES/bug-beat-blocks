@@ -107,10 +107,27 @@ vm.runInContext(`
 
     selectedLevel = 50;
     changeScreen('STAGECLEAR');
+    assert.equal(document.getElementById('overlay-action-btn').innerText, 'NEXT STAGE');
+    document.getElementById('overlay-action-btn').onclick();
+    assert.equal(selectedLevel, 51);
+    assert.deepEqual(setupCalls, [31, 51]);
+
+    selectedLevel = 99;
+    changeScreen('STAGECLEAR');
+    assert.equal(document.getElementById('overlay-action-btn').innerText, 'NEXT STAGE');
+    document.getElementById('overlay-action-btn').onclick();
+    assert.equal(selectedLevel, 100);
+    assert.deepEqual(setupCalls, [31, 51, 100]);
+
+    selectedLevel = 100;
+    changeScreen('STAGECLEAR');
+    assert.equal(document.getElementById('overlay-title').innerText, 'Congratulations!');
+    assert.equal(document.getElementById('overlay-sub').innerText, 'ALL 100 LEVELS CLEARED!');
+    assert.equal(document.getElementById('overlay-sub').classList.contains('hidden'), false);
     assert.equal(document.getElementById('overlay-action-btn').innerText, 'LEVEL SELECT');
     document.getElementById('overlay-action-btn').onclick();
     assert.equal(gameState, 'LEVEL_SELECT');
-    assert.deepEqual(setupCalls, [31]);
+    assert.deepEqual(setupCalls, [31, 51, 100]);
 `, sandbox);
 
 console.log('endless-progression tests passed');
