@@ -19,6 +19,23 @@ async function sha256(value) {
     return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
+function hasValidIpHashSalt(value) {
+    return typeof value === 'string' && value.length >= 32;
+}
+
+async function hmacSha256(secret, value) {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(secret),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+    );
+    const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(value));
+    return Array.from(new Uint8Array(signature), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
 function normalizePlayerName(value) {
     return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
 }
@@ -87,7 +104,7 @@ async function handlePlayerName(context) {
     const deviceHash = await sha256(body.deviceId);
     const now = Date.now();
     const ip = context.request.headers.get('CF-Connecting-IP') || 'unknown';
-    const ipHash = await sha256(ip);
+    const ipHash = await hmacSha256(context.env.IP_HASH_SALT, ip);
     const existingPlayer = await db.prepare(
         'SELECT player_name FROM monthly_players WHERE month_key = ? AND device_hash = ?'
     ).bind(monthKey, deviceHash).first();
@@ -133,7 +150,7 @@ async function handlePlayStart(context) {
     const deviceHash = await sha256(body.deviceId);
     const now = Date.now();
     const ip = context.request.headers.get('CF-Connecting-IP') || 'unknown';
-    const ipHash = await sha256(ip);
+    const ipHash = await hmacSha256(context.env.IP_HASH_SALT, ip);
     const recent = await db.prepare(`
         SELECT COUNT(*) AS count FROM play_sessions
         WHERE created_at >= ? AND (device_hash = ? OR ip_hash = ?)
@@ -326,6 +343,9 @@ async function handleRankings(context) {
 export async function onRequest(context) {
     if (!context.env.RANKINGS_DB) return json({ code: 'DATABASE_NOT_CONFIGURED', message: 'ランキングは準備中です' }, 503);
     const path = Array.isArray(context.params.path) ? context.params.path.join('/') : String(context.params.path || '');
+    if ((path === 'player-name' || path === 'play/start') && !hasValidIpHashSalt(context.env.IP_HASH_SALT)) {
+        return json({ code: 'SECURITY_NOT_CONFIGURED', message: 'ランキングは準備中です' }, 503);
+    }
     try {
         if (path === 'player-name') return await handlePlayerName(context);
         if (path === 'play/start') return await handlePlayStart(context);
