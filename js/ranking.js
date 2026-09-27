@@ -92,8 +92,10 @@ function renderNameSuggestions(suggestions) {
         button.type = 'button';
         button.innerText = name;
         button.onclick = () => {
-            document.getElementById('player-name-input').value = name;
-            submitPlayerName(name);
+            const input = document.getElementById('player-name-input');
+            input.value = name;
+            document.getElementById('player-name-error').innerText = '';
+            input.focus();
         };
         container.appendChild(button);
     });
