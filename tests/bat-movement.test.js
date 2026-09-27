@@ -62,6 +62,17 @@ vm.runInContext(`
     updateBatBugs(100);
     assert.ok(batBugs.find(bat => bat.id === 'lower').posX > 3, 'upper bat must not stop lower bat');
 
+    for (const upperBugType of [8, 9, 13, EGG_BUG, CRACKED_EGG_BUG]) {
+        resetBatTestBoard();
+        batBugs = [
+            { id: 'lower', row: 10, posX: 3, dir: 1, speed: 1.8, minX: 1, maxX: 5, type: 14 }
+        ];
+        board[10][3] = 14;
+        board[9][3] = upperBugType;
+        updateBatBugs(100);
+        assert.ok(batBugs[0].posX > 3, 'grounded bug above must not stop bat: ' + upperBugType);
+    }
+
     resetBatTestBoard();
     batBugs = [
         { id: 'lower', row: 10, posX: 3, dir: 1, speed: 1.8, minX: 1, maxX: 5, type: 14 }

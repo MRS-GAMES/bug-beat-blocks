@@ -172,9 +172,11 @@ const LEVEL_CONFIG = {
 };
 
 const MAX_SELECTABLE_LEVEL = 30;
-const MAX_PLAYABLE_LEVEL = 50;
+const MAX_PLAYABLE_LEVEL = 100;
 const MAX_LEVEL = MAX_PLAYABLE_LEVEL;
 const MIN_RANKING_SCORE = 5000;
+const ENDLESS_PLACEMENT_START_ROW = 6;
+const ENDLESS_PLACEMENT_EXPANSION_INTERVAL = 8;
 const ENDLESS_GUARANTEED = ['white', 'color', 'metal', 'metal', 'egg', 'egg', 'egg', 'batWhite', 'batColor', 'batMetal'];
 const ENDLESS_RANDOM_POOL = ['white', 'color', 'metal', 'egg', 'batWhite', 'batColor', 'batMetal'];
 
@@ -193,6 +195,13 @@ function getLevelConfig(level) {
 
 function getNextLevel(level) {
     return level < MAX_PLAYABLE_LEVEL ? level + 1 : null;
+}
+
+function getEndlessPlacementMinRow(level) {
+    const expansionSteps = Math.floor(
+        Math.max(0, level - 51) / ENDLESS_PLACEMENT_EXPANSION_INTERVAL
+    );
+    return Math.max(0, ENDLESS_PLACEMENT_START_ROW - expansionSteps);
 }
 
 const SHAPES = [

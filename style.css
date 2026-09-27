@@ -590,6 +590,19 @@
 
         #overlay-screen, #pause-screen, #log-screen { background: rgba(36,20,84,0.95); }
 
+        #overlay-title.final-clear-title {
+            max-width: 94%;
+            color: var(--yellow);
+            font-size: clamp(24px, 8vw, 38px) !important;
+            text-shadow: 0 3px 0 #7139cb, 0 0 18px rgba(255, 217, 61, 0.8);
+            animation: final-clear-pulse 1.2s ease-in-out infinite alternate;
+        }
+
+        @keyframes final-clear-pulse {
+            from { transform: scale(1); }
+            to { transform: scale(1.05); }
+        }
+
         .result-card {
             width: 82%;
             max-width: 280px;

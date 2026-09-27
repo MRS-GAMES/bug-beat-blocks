@@ -229,6 +229,35 @@ async function main() {
     const renamedRanking = await api('rankings?type=level');
     assert.equal(renamedRanking.data.entries[0].playerName, 'NEW1');
 
+    const levelBoundaryDevice = 'device-level-boundary';
+    response = await api('player-name', {
+        method: 'POST',
+        body: { deviceId: levelBoundaryDevice, playerName: 'LV100' },
+        deviceIp: '192.0.2.5'
+    });
+    assert.equal(response.status, 200);
+    const level100Start = await api('play/start', {
+        method: 'POST',
+        body: { deviceId: levelBoundaryDevice },
+        deviceIp: '192.0.2.5'
+    });
+    response = await api('records', {
+        method: 'POST',
+        body: { deviceId: levelBoundaryDevice, playToken: level100Start.data.playToken, score: 5000, level: 100 }
+    });
+    assert.equal(response.status, 200, 'level 100 can be registered');
+    const level101Start = await api('play/start', {
+        method: 'POST',
+        body: { deviceId: levelBoundaryDevice },
+        deviceIp: '192.0.2.5'
+    });
+    response = await api('records', {
+        method: 'POST',
+        body: { deviceId: levelBoundaryDevice, playToken: level101Start.data.playToken, score: 5000, level: 101 }
+    });
+    assert.equal(response.status, 400);
+    assert.equal(response.data.code, 'INVALID_RESULT', 'levels above 100 are rejected');
+
     console.log('ranking-api tests passed');
 }
 
