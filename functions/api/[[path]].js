@@ -343,7 +343,7 @@ async function handleRankings(context) {
 export async function onRequest(context) {
     if (!context.env.RANKINGS_DB) return json({ code: 'DATABASE_NOT_CONFIGURED', message: 'ランキングは準備中です' }, 503);
     const path = Array.isArray(context.params.path) ? context.params.path.join('/') : String(context.params.path || '');
-    if ((path === 'player-name' || path === 'play/start') && !hasValidIpHashSalt(context.env.IP_HASH_SALT)) {
+    // Never create new rate-limit identifiers without the configured HMAC secret.\n    if ((path === 'player-name' || path === 'play/start') && !hasValidIpHashSalt(context.env.IP_HASH_SALT)) {
         return json({ code: 'SECURITY_NOT_CONFIGURED', message: 'ランキングは準備中です' }, 503);
     }
     try {
