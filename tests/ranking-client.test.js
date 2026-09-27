@@ -120,8 +120,15 @@ load('js/ranking.js');
     assert.equal(getElement('player-name-input').value, '');
     assert.match(getElement('player-name-prompt').innerText, /Lv9/);
 
-    await vm.runInContext(`submitPlayerName('a-1')`, sandbox);
-    assert.equal(vm.runInContext('getCurrentPlayerName()', sandbox), 'A1');
+    const fetchCountBeforeSuggestion = fetchCalls.length;
+    vm.runInContext(`renderNameSuggestions(['ALT1'])`, sandbox);
+    getElement('player-name-suggestions').children[0].onclick();
+    assert.equal(getElement('player-name-input').value, 'ALT1');
+    assert.equal(fetchCalls.length, fetchCountBeforeSuggestion, 'selecting a suggestion does not submit it');
+    assert.equal(sandbox.resultFlowCompleted, false);
+
+    await vm.runInContext(`submitPlayerName(document.getElementById('player-name-input').value)`, sandbox);
+    assert.equal(vm.runInContext('getCurrentPlayerName()', sandbox), 'ALT1');
     assert.equal(sandbox.resultFlowCompleted, true);
     assert.equal(getElement('result-ranking-status').innerText, '月間 SCORE 3位 / LEVEL 4位');
     assert.equal(vm.runInContext('loadPlayerData().pendingSubmissions.length', sandbox), 0);
@@ -129,7 +136,7 @@ load('js/ranking.js');
     await vm.runInContext('refreshRankingScreen()', sandbox);
     assert.equal(getElement('ranking-list').children.length, 1);
     assert.equal(getElement('ranking-message').classList.contains('hidden'), true);
-    assert.equal(getElement('ranking-player-name').innerText, 'A1');
+    assert.equal(getElement('ranking-player-name').innerText, 'ALT1');
 
     assert.equal(fetchCalls.some(call => call.url === '/api/player-name'), true);
     assert.equal(fetchCalls.some(call => call.url === '/api/play/start'), true);
