@@ -65,8 +65,14 @@ async function main() {
     const db = new D1Mock();
     const ipHashSalt = 'test-only-ip-hash-salt-32-characters-minimum';
 
-    async function api(route, { method = 'GET', body, deviceIp = '192.0.2.1', includeIpHashSalt = true } = {}) {
-        const request = new Request(`https://example.com/api/${route}`, {
+    async function api(route, {
+        method = 'GET',
+        body,
+        deviceIp = '192.0.2.1',
+        includeIpHashSalt = true,
+        origin = 'https://example.com'
+    } = {}) {
+        const request = new Request(`${origin}/api/${route}`, {
             method,
             headers: {
                 ...(body ? { 'Content-Type': 'application/json' } : {}),
@@ -91,6 +97,23 @@ async function main() {
         includeIpHashSalt: false
     });
     assert.equal(response.status, 503);
+    assert.equal(response.data.code, 'SECURITY_NOT_CONFIGURED');
+
+    response = await api('play/start', {
+        method: 'POST',
+        body: { deviceId: 'device-preview-only' },
+        includeIpHashSalt: false,
+        origin: 'https://test-preview.bug-beat-blocks.pages.dev'
+    });
+    assert.equal(response.status, 200, 'Pages preview can use its isolated test-only HMAC key');
+
+    response = await api('play/start', {
+        method: 'POST',
+        body: { deviceId: 'device-production-no-secret' },
+        includeIpHashSalt: false,
+        origin: 'https://bug-beat-blocks.pages.dev'
+    });
+    assert.equal(response.status, 503, 'production still requires IP_HASH_SALT');
     assert.equal(response.data.code, 'SECURITY_NOT_CONFIGURED');
 
     const device1 = 'device-00000001';
