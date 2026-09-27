@@ -116,6 +116,35 @@ async function main() {
     assert.equal(response.status, 503, 'production still requires IP_HASH_SALT');
     assert.equal(response.data.code, 'SECURITY_NOT_CONFIGURED');
 
+    const cleanupNow = Date.now();
+    db.database.prepare(`
+        INSERT INTO play_sessions
+            (token_hash, month_key, device_hash, ip_hash, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `).run('expired-token', '2026-09', 'expired-device', 'expired-ip', cleanupNow - 10000, cleanupNow - 1);
+    db.database.prepare(`
+        INSERT INTO play_sessions
+            (token_hash, month_key, device_hash, ip_hash, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `).run('active-token', '2026-09', 'active-device', 'active-ip', cleanupNow, cleanupNow + 60000);
+
+    response = await api('play/start', {
+        method: 'POST',
+        body: { deviceId: 'device-cleanup-test' },
+        deviceIp: '192.0.2.4'
+    });
+    assert.equal(response.status, 200);
+    assert.equal(
+        db.database.prepare('SELECT token_hash FROM play_sessions WHERE token_hash = ?').get('expired-token'),
+        undefined,
+        'expired play sessions are deleted when a new play starts'
+    );
+    assert.equal(
+        db.database.prepare('SELECT token_hash FROM play_sessions WHERE token_hash = ?').get('active-token').token_hash,
+        'active-token',
+        'unexpired play sessions are preserved'
+    );
+
     const device1 = 'device-00000001';
     const device2 = 'device-00000002';
     const anonymousDevice = 'device-anonymous-0001';

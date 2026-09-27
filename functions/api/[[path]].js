@@ -157,6 +157,7 @@ async function handlePlayStart(context) {
     const monthKey = getJstMonthKey();
     const deviceHash = await sha256(body.deviceId);
     const now = Date.now();
+    await db.prepare('DELETE FROM play_sessions WHERE expires_at < ?').bind(now).run();
     const ip = context.request.headers.get('CF-Connecting-IP') || 'unknown';
     const ipHash = await hmacSha256(getIpHashKey(context), ip);
     const recent = await db.prepare(`
