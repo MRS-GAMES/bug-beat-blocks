@@ -19,9 +19,21 @@
         <button class="btn" id="start-btn">LEVEL SELECT</button>
         <div class="title-sub-actions">
             <button class="btn sky" id="ranking-btn">RANKING</button>
-            <button class="btn secondary title-howto-btn" id="how-to-btn">あそび方</button>
+            <button class="btn mint" id="best-score-btn">BEST SCORE</button>
         </div>
+        <button class="btn secondary title-howto-btn" id="how-to-btn">あそび方</button>
         <a class="mrs-games-link" href="https://mrs-games.pages.dev/">MRS GAMES</a>
+    </div>
+
+    <!-- 端末内ベスト記録画面 -->
+    <div id="best-score-screen" class="screen hidden">
+        <h1 class="section-title">BEST SCORE</h1>
+        <div class="result-card best-score-card">
+            <div class="result-row"><span>BEST SCORE</span><strong id="personal-best-score">0</strong></div>
+            <div class="result-row"><span>BEST LEVEL</span><strong id="personal-best-level">―</strong></div>
+        </div>
+        <p class="best-score-note">この端末に保存された記録です</p>
+        <button class="btn secondary" id="best-score-back-btn">タイトルに戻る</button>
     </div>
 
     <!-- あそび方画面 -->

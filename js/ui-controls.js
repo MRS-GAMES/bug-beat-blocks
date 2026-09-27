@@ -28,6 +28,7 @@ function resizeCanvas() {
 function changeScreen(state, options = {}) {
     gameState = state;
     document.getElementById('title-screen').classList.add('hidden');
+    document.getElementById('best-score-screen').classList.add('hidden');
     document.getElementById('how-to-screen').classList.add('hidden');
     document.getElementById('level-screen').classList.add('hidden');
     document.getElementById('ranking-screen').classList.add('hidden');
@@ -40,6 +41,13 @@ function changeScreen(state, options = {}) {
 
     if (state === 'TITLE') {
         document.getElementById('title-screen').classList.remove('hidden');
+    } else if (state === 'BEST_SCORE') {
+        const playerData = loadPlayerData();
+        document.getElementById('personal-best-score').innerText = formatGameScore(playerData.allTime.score);
+        document.getElementById('personal-best-level').innerText = playerData.allTime.level > 0
+            ? `Lv${playerData.allTime.level}`
+            : '―';
+        document.getElementById('best-score-screen').classList.remove('hidden');
     } else if (state === 'HOW_TO') {
         document.getElementById('how-to-screen').classList.remove('hidden');
         document.querySelector('.how-to-content').scrollTop = 0;
@@ -175,6 +183,8 @@ document.getElementById('start-btn').onclick = () => {
     addLog('Game Started: Level Select');
     changeScreen('LEVEL_SELECT');
 };
+document.getElementById('best-score-btn').onclick = () => changeScreen('BEST_SCORE');
+document.getElementById('best-score-back-btn').onclick = () => changeScreen('TITLE');
 document.getElementById('how-to-btn').onclick = () => changeScreen('HOW_TO');
 document.getElementById('how-to-back-btn').onclick = () => changeScreen('TITLE');
 document.getElementById('back-title-btn').onclick = () => changeScreen('TITLE');

@@ -88,6 +88,18 @@ vm.runInContext(`
     assert.equal(document.getElementById('level-grid').children.length, 30);
     assert.equal(document.getElementById('endless-continue-btn').classList.contains('hidden'), true);
 
+    document.getElementById('best-score-btn').onclick();
+    assert.equal(gameState, 'BEST_SCORE');
+    assert.equal(document.getElementById('personal-best-score').innerText, '0');
+    assert.equal(document.getElementById('personal-best-level').innerText, '―');
+    document.getElementById('best-score-back-btn').onclick();
+    assert.equal(gameState, 'TITLE');
+
+    recordLocalResult(12345, 42);
+    document.getElementById('best-score-btn').onclick();
+    assert.equal(document.getElementById('personal-best-score').innerText, '12,345');
+    assert.equal(document.getElementById('personal-best-level').innerText, 'Lv42');
+
     selectedLevel = 30;
     changeScreen('STAGECLEAR');
     assert.equal(loadHighestEndlessLevel(), 31);
