@@ -23,6 +23,14 @@ function hasValidIpHashSalt(value) {
     return typeof value === 'string' && value.length >= 32;
 }
 
+function getIpHashKey(context) {
+    if (hasValidIpHashSalt(context.env.IP_HASH_SALT)) return context.env.IP_HASH_SALT;
+    const hostname = new URL(context.request.url).hostname;
+    const isPagesPreview = hostname.endsWith('.bug-beat-blocks.pages.dev')
+        && hostname !== 'bug-beat-blocks.pages.dev';
+    return isPagesPreview ? `preview-only-ip-hash-key:${hostname}` : null;
+}
+
 async function hmacSha256(secret, value) {
     const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
@@ -104,7 +112,7 @@ async function handlePlayerName(context) {
     const deviceHash = await sha256(body.deviceId);
     const now = Date.now();
     const ip = context.request.headers.get('CF-Connecting-IP') || 'unknown';
-    const ipHash = await hmacSha256(context.env.IP_HASH_SALT, ip);
+    const ipHash = await hmacSha256(getIpHashKey(context), ip);
     const existingPlayer = await db.prepare(
         'SELECT player_name FROM monthly_players WHERE month_key = ? AND device_hash = ?'
     ).bind(monthKey, deviceHash).first();
@@ -150,7 +158,7 @@ async function handlePlayStart(context) {
     const deviceHash = await sha256(body.deviceId);
     const now = Date.now();
     const ip = context.request.headers.get('CF-Connecting-IP') || 'unknown';
-    const ipHash = await hmacSha256(context.env.IP_HASH_SALT, ip);
+    const ipHash = await hmacSha256(getIpHashKey(context), ip);
     const recent = await db.prepare(`
         SELECT COUNT(*) AS count FROM play_sessions
         WHERE created_at >= ? AND (device_hash = ? OR ip_hash = ?)
@@ -343,8 +351,8 @@ async function handleRankings(context) {
 export async function onRequest(context) {
     if (!context.env.RANKINGS_DB) return json({ code: 'DATABASE_NOT_CONFIGURED', message: 'ランキングは準備中です' }, 503);
     const path = Array.isArray(context.params.path) ? context.params.path.join('/') : String(context.params.path || '');
-    // Never create new rate-limit identifiers without the configured HMAC secret.
-    if ((path === 'player-name' || path === 'play/start') && !hasValidIpHashSalt(context.env.IP_HASH_SALT)) {
+    // Production must never create rate-limit identifiers without the configured HMAC secret.
+    if ((path === 'player-name' || path === 'play/start') && !getIpHashKey(context)) {
         return json({ code: 'SECURITY_NOT_CONFIGURED', message: 'ランキングは準備中です' }, 503);
     }
     try {
