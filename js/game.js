@@ -146,11 +146,13 @@ function createEnemyPlacements(enemyTypes, level) {
     return placements;
 }
 
-function isObstacleAt(r, c, currentBatId, includeOtherBats = true) {
+function isObstacleAt(r, c, currentBatId, includeOtherBats = true, includeGroundedBugs = true) {
     if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return true;
 
     let cell = board[r][c];
-    if (cell !== 0 && (cell < 14 || cell > 19)) return true;
+    const isBlock = cell >= 1 && cell <= RAINBOW_BLOCK;
+    const isGroundedBug = cell >= 8 && !isBatBugType(cell);
+    if (isBlock || (includeGroundedBugs && isGroundedBug)) return true;
 
     if (includeOtherBats) {
         for (let b of batBugs) {
@@ -189,8 +191,9 @@ function updateBatBugs(dt) {
     batBugs.forEach(b => {
         let currentGridX = Math.round(b.posX);
 
-        // 真上のコウモリは移動を妨げない。同じ段のコウモリ同士は従来どおり衝突させる。
-        let hasBlockAbove = isObstacleAt(b.row - 1, currentGridX, b.id, false);
+        // 真上のバグは移動を妨げず、ブロックだけがコウモリを固定する。
+        // 同じ段のコウモリ同士は従来どおり衝突させる。
+        let hasBlockAbove = isObstacleAt(b.row - 1, currentGridX, b.id, false, false);
         if (hasBlockAbove && b.row > 0) {
             b.posX = currentGridX;
             if (board[b.row][currentGridX] === 0) {
