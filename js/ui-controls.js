@@ -99,9 +99,13 @@ function changeScreen(state, options = {}) {
         const rankingStatus = document.getElementById('result-ranking-status');
         rankingStatus.classList.toggle('hidden', state !== 'GAMEOVER');
         if (state === 'GAMEOVER') {
-            rankingStatus.innerText = result.score >= MIN_RANKING_SCORE
-                ? 'リトライまたはタイトルに戻る時にランキング登録できます'
-                : `${formatGameScore(MIN_RANKING_SCORE)}点以上でランキング登録できます`;
+            if (result.score < MIN_RANKING_SCORE) {
+                rankingStatus.innerText = `${formatGameScore(MIN_RANKING_SCORE)}点以上でランキング登録できます`;
+            } else if (shouldOfferRankingEntry(result)) {
+                rankingStatus.innerText = 'リトライまたはタイトルに戻る時にランキング登録できます';
+            } else {
+                rankingStatus.innerText = '今回の記録は歴代ベスト未更新です';
+            }
         }
         document.getElementById('overlay-action-btn').innerText = state === 'GAMEOVER'
             ? 'RETRY'
@@ -198,7 +202,7 @@ function returnToTitleFromPlay() {
 function registerCurrentRunBefore(onComplete) {
     const result = recordLocalResult(score, selectedLevel);
     window.currentGameResult = result;
-    if (result.score < MIN_RANKING_SCORE) {
+    if (!shouldOfferRankingEntry(result)) {
         onComplete();
         return;
     }
@@ -210,7 +214,7 @@ function registerCurrentRunBefore(onComplete) {
 
 function continueResultAfterRanking(onComplete) {
     const result = window.currentGameResult;
-    if (!result || result.score < MIN_RANKING_SCORE || result.rankingFinalized) {
+    if (!shouldOfferRankingEntry(result)) {
         onComplete();
         return;
     }

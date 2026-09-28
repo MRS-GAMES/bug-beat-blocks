@@ -136,6 +136,22 @@ load('js/ranking.js');
     assert.equal(getElement('ranking-message').classList.contains('hidden'), true);
     assert.equal(getElement('ranking-player-name').innerText, 'ALT1');
 
+    assert.equal(
+        vm.runInContext(`shouldOfferRankingEntry({ score: 9000, level: 8, isNewScore: false, isNewLevel: false })`, sandbox),
+        false,
+        'an existing player does not see the entry screen for a lower result'
+    );
+    assert.equal(
+        vm.runInContext(`shouldOfferRankingEntry({ score: 13000, level: 8, isNewScore: true, isNewLevel: false })`, sandbox),
+        true,
+        'a new best score can be submitted'
+    );
+    assert.equal(
+        vm.runInContext(`shouldOfferRankingEntry({ score: 9000, level: 10, isNewScore: false, isNewLevel: true })`, sandbox),
+        true,
+        'a new best level can be submitted even if the score is lower'
+    );
+
     assert.equal(fetchCalls.some(call => call.url === '/api/player-name'), true);
     assert.equal(fetchCalls.some(call => call.url === '/api/play/start'), true);
     assert.equal(fetchCalls.some(call => call.url === '/api/records'), true);

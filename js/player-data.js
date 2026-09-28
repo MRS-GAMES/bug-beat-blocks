@@ -95,6 +95,12 @@ function getCurrentPlayerName() {
     return loadPlayerData().playerName;
 }
 
+function shouldOfferRankingEntry(result) {
+    if (!result || result.rankingFinalized || result.score < MIN_RANKING_SCORE) return false;
+    if (!getCurrentPlayerName()) return true;
+    return Boolean(result.isNewScore || result.isNewLevel);
+}
+
 function queuePendingSubmission(submission) {
     const data = loadPlayerData();
     data.pendingSubmissions = data.pendingSubmissions.filter(item => item.playToken !== submission.playToken);
