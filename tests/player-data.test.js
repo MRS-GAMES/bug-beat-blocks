@@ -71,7 +71,7 @@ vm.runInContext(`
 (async () => {
     const result = await vm.runInContext(`shareGameResult({ score: 1500, level: 8, bestScore: 1500, scoreRank: 4 })`, sandbox);
     assert.equal(result, 'copied');
-    assert.match(sandbox.copiedText, /月間ハイスコア順位：4位/);
+    assert.match(sandbox.copiedText, /歴代ハイスコア順位：4位/);
     assert.match(sandbox.copiedText, /https:\/\/example.com\/game/);
     console.log('player-data tests passed');
 })().catch(error => {

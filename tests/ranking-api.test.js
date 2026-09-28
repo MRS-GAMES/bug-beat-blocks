@@ -40,6 +40,7 @@ class D1Mock {
         this.database = new DatabaseSync(':memory:');
         this.database.exec('PRAGMA foreign_keys = ON');
         this.database.exec(fs.readFileSync(path.join(root, 'migrations/0001_monthly_rankings.sql'), 'utf8'));
+        this.database.exec(fs.readFileSync(path.join(root, 'migrations/0002_all_time_rankings.sql'), 'utf8'));
     }
 
     prepare(sql) {
@@ -60,6 +61,42 @@ class D1Mock {
 }
 
 async function main() {
+    const migrationDb = new DatabaseSync(':memory:');
+    migrationDb.exec('PRAGMA foreign_keys = ON');
+    migrationDb.exec(fs.readFileSync(path.join(root, 'migrations/0001_monthly_rankings.sql'), 'utf8'));
+    migrationDb.prepare(`
+        INSERT INTO monthly_players
+            (month_key, device_hash, player_name, claim_ip_hash, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?)
+    `).run(
+        '2026-08', 'legacy-device', 'OLD1', 'legacy-ip', 100, 100,
+        '2026-09', 'legacy-device', 'NEW1', 'legacy-ip', 200, 200
+    );
+    migrationDb.prepare(`
+        INSERT INTO monthly_records
+            (month_key, device_hash, best_score, score_run_level, best_level,
+             level_run_score, score_recorded_at, level_recorded_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+        '2026-08', 'legacy-device', 15000, 8, 8, 15000, 110, 110, 110,
+        '2026-09', 'legacy-device', 12000, 10, 10, 12000, 210, 210, 210
+    );
+    migrationDb.exec(fs.readFileSync(path.join(root, 'migrations/0002_all_time_rankings.sql'), 'utf8'));
+    assert.equal(
+        migrationDb.prepare('SELECT player_name FROM players WHERE device_hash = ?').get('legacy-device').player_name,
+        'NEW1',
+        'migration keeps the most recently used player name'
+    );
+    const migratedRecord = migrationDb.prepare(
+        'SELECT best_score, score_run_level, best_level, level_run_score FROM all_time_records WHERE device_hash = ?'
+    ).get('legacy-device');
+    assert.deepEqual(
+        { ...migratedRecord },
+        { best_score: 15000, score_run_level: 8, best_level: 10, level_run_score: 12000 },
+        'migration combines the historical best score and best level'
+    );
+    migrationDb.close();
+
     const moduleUrl = `${pathToFileURL(path.join(root, 'functions/api/[[path]].js')).href}?test=${Date.now()}`;
     const { onRequest } = await import(moduleUrl);
     const db = new D1Mock();
@@ -166,7 +203,7 @@ async function main() {
     assert.equal(response.data.playerName, 'MRS1');
 
     const storedPlayer = db.database.prepare(
-        'SELECT claim_ip_hash FROM monthly_players WHERE player_name = ?'
+        'SELECT claim_ip_hash FROM players WHERE player_name = ?'
     ).get('MRS1');
     const encoder = new TextEncoder();
     const hmacKey = await crypto.subtle.importKey(
@@ -228,6 +265,29 @@ async function main() {
     assert.equal(response.status, 200);
     const renamedRanking = await api('rankings?type=level');
     assert.equal(renamedRanking.data.entries[0].playerName, 'NEW1');
+
+    response = await api('player-name', { method: 'POST', body: { deviceId: 'device-00000003', playerName: 'MRS1' } });
+    assert.equal(response.status, 200, 'renaming releases the old name globally');
+
+    const bulkPlayer = db.database.prepare(`
+        INSERT INTO players (device_hash, player_name, claim_ip_hash, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+    `);
+    const bulkRecord = db.database.prepare(`
+        INSERT INTO all_time_records (
+            device_hash, best_score, score_run_level, best_level, level_run_score,
+            score_recorded_at, level_recorded_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (let index = 0; index < 101; index += 1) {
+        const deviceHash = `bulk-device-${index}`;
+        bulkPlayer.run(deviceHash, `T${String(index).padStart(4, '0')}`, 'bulk-ip', index, index);
+        bulkRecord.run(deviceHash, 20000 + index, 20, 20, 20000 + index, index, index, index);
+    }
+    const top100 = await api('rankings?type=score');
+    assert.equal(top100.status, 200);
+    assert.equal(top100.data.entries.length, 100, 'all-time ranking publishes the top 100');
+    assert.equal(top100.data.entries[0].score, 20100);
 
     const levelBoundaryDevice = 'device-level-boundary';
     response = await api('player-name', {

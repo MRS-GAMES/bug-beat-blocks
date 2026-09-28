@@ -83,17 +83,16 @@ function savePlayerData(data) {
     }
 }
 
-function saveRegisteredPlayerName(playerName, monthKey = getJstMonthKey()) {
+function saveRegisteredPlayerName(playerName) {
     const data = loadPlayerData();
     data.playerName = playerName;
-    data.playerNameMonth = monthKey;
+    data.playerNameMonth = '';
     savePlayerData(data);
     return data;
 }
 
 function getCurrentPlayerName() {
-    const data = loadPlayerData();
-    return data.playerNameMonth === getJstMonthKey() ? data.playerName : '';
+    return loadPlayerData().playerName;
 }
 
 function queuePendingSubmission(submission) {
@@ -151,7 +150,7 @@ function buildResultShareText(result) {
         `SCORE：${formatGameScore(result.score)}`,
         `自己ベスト：${formatGameScore(result.bestScore)}`
     ];
-    if (Number.isInteger(result.scoreRank)) lines.push(`月間ハイスコア順位：${result.scoreRank}位`);
+    if (Number.isInteger(result.scoreRank)) lines.push(`歴代ハイスコア順位：${result.scoreRank}位`);
     lines.push('', 'ゲームに挑戦！');
     return lines.join('\n');
 }

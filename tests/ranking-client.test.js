@@ -75,20 +75,19 @@ const sandbox = {
         fetchCalls.push({ url, options });
         if (url === '/api/player-name') {
             const body = JSON.parse(options.body);
-            return { ok: true, status: 200, json: async () => ({ monthKey, playerName: body.playerName }) };
+            return { ok: true, status: 200, json: async () => ({ playerName: body.playerName }) };
         }
         if (url === '/api/play/start') {
             return { ok: true, status: 200, json: async () => ({ monthKey, playToken: 'play-token-1' }) };
         }
         if (url === '/api/records') {
-            return { ok: true, status: 200, json: async () => ({ monthKey, scoreRank: 3, levelRank: 4 }) };
+            return { ok: true, status: 200, json: async () => ({ scoreRank: 3, levelRank: 4 }) };
         }
         if (url.startsWith('/api/rankings?')) {
             return {
                 ok: true,
                 status: 200,
                 json: async () => ({
-                    monthKey,
                     entries: [{ rank: 1, playerName: 'AAA', level: 12, score: 5000, isOwn: false }],
                     ownEntry: null
                 })
@@ -129,7 +128,7 @@ load('js/ranking.js');
     await vm.runInContext(`submitPlayerName(document.getElementById('player-name-input').value)`, sandbox);
     assert.equal(vm.runInContext('getCurrentPlayerName()', sandbox), 'ALT1');
     assert.equal(sandbox.resultFlowCompleted, true);
-    assert.equal(getElement('result-ranking-status').innerText, '月間 SCORE 3位 / LEVEL 4位');
+    assert.equal(getElement('result-ranking-status').innerText, '歴代 SCORE 3位 / LEVEL 4位');
     assert.equal(vm.runInContext('loadPlayerData().pendingSubmissions.length', sandbox), 0);
 
     await vm.runInContext('refreshRankingScreen()', sandbox);

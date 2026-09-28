@@ -110,14 +110,14 @@
         <button class="btn secondary" id="back-title-btn">TITLEに戻る</button>
     </div>
 
-    <!-- 月間ランキング画面 -->
+    <!-- 歴代ランキング画面 -->
     <div id="ranking-screen" class="screen hidden">
-        <h1 class="section-title ranking-title">MONTHLY RANKING</h1>
+        <h1 class="section-title ranking-title">ALL-TIME RANKING</h1>
         <div class="ranking-player-card">
             <span>PLAYER</span>
             <button id="ranking-player-name" type="button">名前を登録</button>
         </div>
-        <p id="ranking-month" class="ranking-month"></p>
+        <p id="ranking-scope" class="ranking-scope">ALL-TIME TOP 100</p>
         <div class="ranking-tabs">
             <button id="ranking-score-tab" class="ranking-tab active" type="button">HIGH SCORE</button>
             <button id="ranking-level-tab" class="ranking-tab" type="button">LEVEL</button>
@@ -141,7 +141,7 @@
             <p id="player-name-prompt" class="player-name-prompt hidden"></p>
             <p>英大文字・数字で1〜5文字</p>
             <input id="player-name-input" type="text" maxlength="5" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="プレイヤー名">
-            <p class="player-name-notice">登録名と記録は月間ランキングで公開されます。</p>
+            <p class="player-name-notice">登録名と記録は歴代ランキングで公開されます。</p>
             <p id="player-name-error" class="player-name-error"></p>
             <div id="player-name-suggestions" class="player-name-suggestions"></div>
         </div>
