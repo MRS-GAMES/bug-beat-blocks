@@ -477,6 +477,7 @@
             border-radius: 9px;
             background: rgba(112, 214, 255, 0.35);
             font-size: 14px;
+            white-space: pre-line;
         }
 
         #player-name-input {
@@ -541,7 +542,7 @@
         }
 
         .player-name-actions.result-entry-actions .btn {
-            width: calc(50% - 4px);
+            width: 100%;
             margin: 8px 0;
             padding: 12px 8px;
             font-size: 13px;

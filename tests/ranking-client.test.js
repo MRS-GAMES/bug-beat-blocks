@@ -43,6 +43,8 @@ function getElement(id) {
 const storage = new Map();
 const fetchCalls = [];
 const monthKey = '2026-09';
+let failNextPlayerName = false;
+let recordsPlayerName = 'ALT1';
 const sandbox = {
     assert,
     console,
@@ -75,13 +77,21 @@ const sandbox = {
         fetchCalls.push({ url, options });
         if (url === '/api/player-name') {
             const body = JSON.parse(options.body);
+            if (failNextPlayerName) {
+                failNextPlayerName = false;
+                return {
+                    ok: false,
+                    status: 503,
+                    json: async () => ({ code: 'INTERNAL_ERROR', message: '通信エラー' })
+                };
+            }
             return { ok: true, status: 200, json: async () => ({ playerName: body.playerName }) };
         }
         if (url === '/api/play/start') {
             return { ok: true, status: 200, json: async () => ({ monthKey, playToken: 'play-token-1' }) };
         }
         if (url === '/api/records') {
-            return { ok: true, status: 200, json: async () => ({ scoreRank: 3, levelRank: 4 }) };
+            return { ok: true, status: 200, json: async () => ({ playerName: recordsPlayerName, scoreRank: 3, levelRank: 4 }) };
         }
         if (url.startsWith('/api/rankings?')) {
             return {
@@ -117,6 +127,9 @@ load('js/ranking.js');
     assert.equal(sandbox.screenState, 'PLAYER_NAME');
     assert.equal(getElement('player-name-input').value, '');
     assert.match(getElement('player-name-prompt').innerText, /Lv9/);
+    assert.match(getElement('player-name-prompt').innerText, /ユーザー名を登録してください/);
+    assert.equal(getElement('player-name-cancel-btn').classList.contains('hidden'), true);
+    assert.equal(getElement('player-name-save-btn').innerText, 'ランキング登録して次へ');
 
     const fetchCountBeforeSuggestion = fetchCalls.length;
     vm.runInContext(`renderNameSuggestions(['ALT1'])`, sandbox);
@@ -151,6 +164,28 @@ load('js/ranking.js');
         true,
         'a new best level can be submitted even if the score is lower'
     );
+
+    await vm.runInContext(`
+        const dataForAutomaticName = loadPlayerData();
+        dataForAutomaticName.playerName = '';
+        dataForAutomaticName.playerNameMonth = '';
+        savePlayerData(dataForAutomaticName);
+        playerNameVerified = false;
+        startOnlinePlay();
+    `, sandbox);
+    recordsPlayerName = '00001';
+    failNextPlayerName = true;
+    vm.runInContext(`
+        globalThis.automaticNameFlowCompleted = false;
+        openRankingResultNameScreen(
+            { score: 15000, level: 11, bestScore: 15000, isNewScore: true, isNewLevel: true },
+            { onComplete: () => { globalThis.automaticNameFlowCompleted = true; } }
+        );
+        document.getElementById('player-name-input').value = 'ERROR';
+    `, sandbox);
+    await vm.runInContext(`submitRankingEntry()`, sandbox);
+    assert.equal(sandbox.automaticNameFlowCompleted, true);
+    assert.equal(vm.runInContext('getCurrentPlayerName()', sandbox), '00001');
 
     assert.equal(fetchCalls.some(call => call.url === '/api/player-name'), true);
     assert.equal(fetchCalls.some(call => call.url === '/api/play/start'), true);

@@ -250,6 +250,36 @@ async function getRecordRanks(db, deviceHash) {
     };
 }
 
+async function claimAutomaticPlayer(db, deviceHash, ipHash, now) {
+    const baseNumber = Number.parseInt(deviceHash.slice(0, 8), 16) % 100000;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+        const playerName = String((baseNumber + attempt) % 100000).padStart(5, '0');
+        try {
+            await db.prepare(`
+                INSERT INTO players (device_hash, player_name, claim_ip_hash, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+            `).bind(deviceHash, playerName, ipHash, now, now).run();
+            return { player_name: playerName };
+        } catch (error) {
+            const existingPlayer = await db.prepare(
+                'SELECT player_name FROM players WHERE device_hash = ?'
+            ).bind(deviceHash).first();
+            if (existingPlayer) return existingPlayer;
+        }
+    }
+    throw new Error('Automatic player name pool is temporarily unavailable');
+}
+
+async function getRecordResponse(db, deviceHash) {
+    const player = await db.prepare(
+        'SELECT player_name FROM players WHERE device_hash = ?'
+    ).bind(deviceHash).first();
+    return {
+        playerName: player?.player_name || null,
+        ...(await getRecordRanks(db, deviceHash))
+    };
+}
+
 async function handleRecords(context) {
     if (context.request.method !== 'POST') return json({ code: 'METHOD_NOT_ALLOWED' }, 405);
     const body = await readJson(context.request);
@@ -275,17 +305,17 @@ async function handleRecords(context) {
     if (!session || session.device_hash !== deviceHash) return json({ code: 'INVALID_PLAY', message: 'プレイ情報が無効です' }, 409);
     if (session.used_at) {
         if (Number(session.result_score) === score && Number(session.result_level) === level) {
-            return json(await getRecordRanks(db, deviceHash));
+            return json(await getRecordResponse(db, deviceHash));
         }
         return json({ code: 'PLAY_ALREADY_USED', message: 'このプレイは送信済みです' }, 409);
     }
     if (Number(session.expires_at) < Date.now()) return json({ code: 'PLAY_EXPIRED', message: 'プレイ情報の期限が切れています' }, 409);
 
-    const player = await db.prepare(
+    let player = await db.prepare(
         'SELECT player_name FROM players WHERE device_hash = ?'
     ).bind(deviceHash).first();
-    if (!player) return json({ code: 'NAME_REQUIRED' }, 409);
     const now = Date.now();
+    if (!player) player = await claimAutomaticPlayer(db, deviceHash, session.ip_hash, now);
     await db.batch([
         db.prepare(UPSERT_RECORD_SQL).bind(
             deviceHash, score, level, level, score, now, now, now, tokenHash
@@ -295,7 +325,7 @@ async function handleRecords(context) {
             WHERE token_hash = ? AND used_at IS NULL
         `).bind(now, score, level, tokenHash)
     ]);
-    return json(await getRecordRanks(db, deviceHash));
+    return json({ playerName: player.player_name, ...(await getRecordRanks(db, deviceHash)) });
 }
 
 async function handleRankings(context) {

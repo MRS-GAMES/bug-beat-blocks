@@ -60,22 +60,26 @@ async function reclaimSavedPlayerName() {
 function openPlayerNameScreen(options = {}) {
     const data = loadPlayerData();
     const input = document.getElementById('player-name-input');
-    input.value = data.playerName || '';
+    const currentPlayerName = getCurrentPlayerName();
+    input.value = currentPlayerName || '';
     document.getElementById('player-name-error').innerText = '';
     document.getElementById('player-name-suggestions').innerHTML = '';
     playerNameFlow = options.mode === 'result' ? options : { mode: 'ranking' };
     const isResultEntry = playerNameFlow.mode === 'result';
+    const hasRegisteredName = Boolean(isResultEntry && currentPlayerName);
+    input.readOnly = hasRegisteredName;
     document.getElementById('player-name-title').innerText = isResultEntry ? 'RANKING ENTRY' : 'PLAYER NAME';
     const prompt = document.getElementById('player-name-prompt');
     prompt.classList.toggle('hidden', !isResultEntry);
     prompt.innerText = isResultEntry
-        ? `Lv${playerNameFlow.result.level} / ${formatGameScore(playerNameFlow.result.score)}点を登録します`
+        ? `${hasRegisteredName ? `PLAYER: ${currentPlayerName}` : 'ユーザー名を登録してください'}\nLv${playerNameFlow.result.level} / ${formatGameScore(playerNameFlow.result.score)}点`
         : '';
     document.getElementById('player-name-actions').classList.toggle('result-entry-actions', isResultEntry);
-    document.getElementById('player-name-save-btn').innerText = isResultEntry ? 'この名前で登録' : 'この名前にする';
-    document.getElementById('player-name-cancel-btn').innerText = isResultEntry ? '登録しない' : '戻る';
+    document.getElementById('player-name-save-btn').innerText = isResultEntry ? 'ランキング登録して次へ' : 'この名前にする';
+    document.getElementById('player-name-cancel-btn').classList.toggle('hidden', isResultEntry);
+    document.getElementById('player-name-cancel-btn').innerText = '戻る';
     changeScreen('PLAYER_NAME');
-    setTimeout(() => input.focus(), 50);
+    if (!hasRegisteredName) setTimeout(() => input.focus(), 50);
 }
 
 function openRankingResultNameScreen(result, options = {}) {
@@ -137,10 +141,27 @@ async function submitPlayerName(inputValue) {
             changeScreen('RANKING');
         }
     } catch (apiError) {
-        error.innerText = apiError.status === 409
-            ? 'その名前はすでに使われています'
-            : '名前を登録できませんでした。通信を確認してください';
-        renderNameSuggestions(apiError.suggestions || []);
+        const isInputError = apiError.status >= 400 && apiError.status < 500 && apiError.status !== 429;
+        if (isInputError) {
+            error.innerText = apiError.status === 409
+                ? 'その名前はすでに使われています'
+                : '名前を確認してください';
+            renderNameSuggestions(apiError.suggestions || []);
+        } else if (playerNameFlow?.mode === 'result') {
+            const completedFlow = playerNameFlow;
+            error.innerText = '自動ユーザー名で送信中...';
+            const submitted = await submitCurrentRankingResult(completedFlow.result);
+            if (submitted) {
+                playerNameFlow = null;
+                if (typeof completedFlow.onComplete === 'function') completedFlow.onComplete();
+            } else {
+                error.innerText = '今回はランキング通信の対象外です';
+                playerNameFlow = null;
+                if (typeof completedFlow.onComplete === 'function') completedFlow.onComplete();
+            }
+        } else {
+            error.innerText = '名前を登録できませんでした。通信を確認してください';
+        }
     } finally {
         saveButton.disabled = false;
     }
@@ -223,7 +244,11 @@ async function retryPendingRankingSubmissions() {
     const pending = loadPlayerData().pendingSubmissions;
     for (const submission of pending) {
         try {
-            await sendRankingResult(submission);
+            const response = await sendRankingResult(submission);
+            if (response.playerName) {
+                saveRegisteredPlayerName(response.playerName);
+                playerNameVerified = true;
+            }
         } catch (error) {
             if (error.status >= 400 && error.status < 500 && error.status !== 429) {
                 removePendingSubmission(submission.playToken);
@@ -237,11 +262,6 @@ async function submitCurrentRankingResult(result) {
     const data = loadPlayerData();
     if (result.score < MIN_RANKING_SCORE) {
         status.innerText = `ランキングは${formatGameScore(MIN_RANKING_SCORE)}点以上から登録できます`;
-        status.classList.remove('hidden');
-        return false;
-    }
-    if (!getCurrentPlayerName()) {
-        status.innerText = '名前登録後のプレイからランキング対象';
         status.classList.remove('hidden');
         return false;
     }
@@ -264,6 +284,10 @@ async function submitCurrentRankingResult(result) {
     status.classList.remove('hidden');
     try {
         const response = await sendRankingResult(submission);
+        if (response.playerName) {
+            saveRegisteredPlayerName(response.playerName);
+            playerNameVerified = true;
+        }
         result.scoreRank = response.scoreRank;
         result.levelRank = response.levelRank;
         status.innerText = `歴代 SCORE ${response.scoreRank}位 / LEVEL ${response.levelRank}位`;
@@ -271,6 +295,24 @@ async function submitCurrentRankingResult(result) {
         status.innerText = '通信後にランキング送信を再試行します';
     }
     return true;
+}
+
+async function submitRankingEntry() {
+    if (playerNameFlow?.mode !== 'result' || !getCurrentPlayerName()) {
+        return submitPlayerName(document.getElementById('player-name-input').value);
+    }
+    const completedFlow = playerNameFlow;
+    const saveButton = document.getElementById('player-name-save-btn');
+    const error = document.getElementById('player-name-error');
+    saveButton.disabled = true;
+    error.innerText = '送信中...';
+    const submitted = await submitCurrentRankingResult(completedFlow.result);
+    saveButton.disabled = false;
+    if (!submitted) {
+        error.innerText = '今回はランキング通信の対象外です';
+    }
+    playerNameFlow = null;
+    if (typeof completedFlow.onComplete === 'function') completedFlow.onComplete();
 }
 
 function cancelPlayerNameFlow() {
@@ -307,6 +349,6 @@ document.getElementById('player-name-input').addEventListener('input', event => 
     if (event.target.value !== normalized) event.target.value = normalized;
 });
 document.getElementById('player-name-save-btn').onclick = () => {
-    submitPlayerName(document.getElementById('player-name-input').value);
+    return submitRankingEntry();
 };
 document.getElementById('player-name-cancel-btn').onclick = cancelPlayerNameFlow;
