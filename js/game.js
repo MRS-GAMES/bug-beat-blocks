@@ -56,8 +56,6 @@ function setupStage(level) {
     holdTimer = null;
     fastBtn.classList.remove('active');
 
-    const eggCount = enemyTypes.filter(type => type === EGG_BUG).length;
-    addLog(`Setup Stage ${level}: ${bugCount} bugs (Egg Bugs: ${eggCount}, Bat Bugs: ${batBugs.length})`);
 }
 
 function shuffleArray(values) {
@@ -386,11 +384,8 @@ function mergePiece() {
             }
         });
     });
-    addLog(`Piece Merged (GroupID:${currentPiece.groupId}) at X:${currentPiece.x}, Y:${currentPiece.y}`);
-
     for (let c = 0; c < COLS; c++) {
         if (board[0][c] !== 0) {
-            addLog('Game Over: Block Reached Top Edge (Row 0)');
             changeScreen('GAMEOVER');
             return;
         }
@@ -536,10 +531,6 @@ function processMatches(shouldAdvance = true) {
         isAnimating = true;
         animPhase = 'WAIT_CLEAR';
         animTimer = 0;
-        const rainbowLog = pendingRainbowColors.length > 0
-            ? ` Rainbow colors: ${pendingRainbowColors.join(',')}`
-            : '';
-        addLog(`Match Found: Chain x${chainCount}.${rainbowLog}`);
     } else {
         if (advanceAfterResolution) {
             advancePiece();
@@ -612,8 +603,6 @@ function updateAnimation(dt) {
                 remainingEnemies = Math.max(0, remainingEnemies - killed);
                 flashAlpha = 0.6;
             }
-
-            addLog(`Cleared ${clearedCount} blocks, Defeated ${killed} bugs (Chain x${chainCount}). Remaining: ${remainingEnemies}`);
 
             resplitDisconnectedGroups();
             setupGroupGravityAnimation(advanceAfterResolution);
@@ -820,7 +809,6 @@ function setupGroupGravityAnimation(triggerNextPiece = true) {
         advanceAfterResolution = triggerNextPiece;
         animPhase = 'FALLING';
         animTimer = 0;
-        addLog(`Gravity Fall Triggered: ${fallingGroups.length} groups moving`);
     } else {
         if (triggerNextPiece) {
             advancePiece();
@@ -883,7 +871,6 @@ function finishAdvancePiece() {
 
     if (remainingEnemies <= 0) {
         gameState = 'CLEARING';
-        addLog('All Bugs Defeated! Stage Clear');
         updateUI();
         setTimeout(() => {
             if (gameState === 'CLEARING') changeScreen('STAGECLEAR');
@@ -895,7 +882,6 @@ function finishAdvancePiece() {
     nextPiece = new Piece(Math.floor(Math.random() * 7) + 1);
 
     if (checkCollisionAt(currentPiece.x, currentPiece.y, currentPiece.shape)) {
-        addLog('Game Over: Spawn Block Collided');
         changeScreen('GAMEOVER');
     }
 }
@@ -928,7 +914,6 @@ function startEggTurnResolution() {
     isAnimating = true;
     animPhase = 'EGG_TRANSITION';
     animTimer = 0;
-    addLog(`Egg turn resolution: ${actions.filter(action => action.kind === 'crack').length} cracked, ${actions.filter(action => action.kind === 'hatch').length} hatched`);
     return true;
 }
 

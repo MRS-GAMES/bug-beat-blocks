@@ -35,7 +35,6 @@ function changeScreen(state, options = {}) {
     document.getElementById('player-name-screen').classList.add('hidden');
     document.getElementById('overlay-screen').classList.add('hidden');
     document.getElementById('pause-screen').classList.add('hidden');
-    document.getElementById('log-screen').classList.add('hidden');
     document.getElementById('game-header').classList.add('hidden');
     document.getElementById('side-panel').classList.add('hidden');
 
@@ -66,12 +65,6 @@ function changeScreen(state, options = {}) {
     } else if (state === 'PAUSED') {
         document.getElementById('game-header').classList.remove('hidden');
         document.getElementById('pause-screen').classList.remove('hidden');
-    } else if (state === 'LOGS') {
-        document.getElementById('game-header').classList.remove('hidden');
-        document.getElementById('log-screen').classList.remove('hidden');
-        const container = document.getElementById('log-container');
-        container.innerText = devLogs.join('\n') || 'ログはまだありません。';
-        container.scrollTop = container.scrollHeight;
     } else if (state === 'GAMEOVER' || state === 'STAGECLEAR') {
         if (state === 'STAGECLEAR') {
             const unlockedLevel = getNextLevel(selectedLevel);
@@ -180,7 +173,6 @@ document.getElementById('endless-continue-btn').onclick = () => {
 
 document.getElementById('start-btn').onclick = () => {
     initAudio();
-    addLog('Game Started: Level Select');
     changeScreen('LEVEL_SELECT');
 };
 document.getElementById('best-score-btn').onclick = () => changeScreen('BEST_SCORE');
@@ -280,27 +272,6 @@ document.getElementById('pause-title-btn').onclick = () => {
     if (!window.confirm('現在のスコアはリセットされます。\nタイトルに戻りますか？')) return;
     registerCurrentRunBefore(returnToTitleFromPlay);
 };
-document.getElementById('close-log-btn').onclick = () => {
-    changeScreen('PAUSED');
-};
-
-document.getElementById('copy-log-btn').onclick = () => {
-    const logText = devLogs.join('\n');
-    if (!logText) return;
-
-    const textArea = document.createElement('textarea');
-    textArea.value = logText;
-    document.body.appendChild(textArea);
-    textArea.select();
-    try {
-        document.execCommand('copy');
-        const copyBtn = document.getElementById('copy-log-btn');
-        copyBtn.innerText = 'コピー完了！';
-        setTimeout(() => { copyBtn.innerText = 'コピー'; }, 1500);
-    } catch(err) {}
-    document.body.removeChild(textArea);
-};
-
 function rotatePiece() {
     if (gameState !== 'PLAYING' || isAnimating || !currentPiece) return;
     let oldShape = currentPiece.shape;

@@ -592,7 +592,7 @@
         }
 
         #best-score-screen,
-        #overlay-screen, #pause-screen, #log-screen { background: rgba(36,20,84,0.95); }
+        #overlay-screen, #pause-screen { background: rgba(36,20,84,0.95); }
 
         .best-score-card {
             margin-top: 18px;
@@ -662,33 +662,6 @@
             text-align: center;
         }
 
-        #log-container {
-            width: 90%;
-            max-width: 380px;
-            height: 240px;
-            background: #100828;
-            border: 2px solid var(--mint);
-            border-radius: 12px;
-            padding: 10px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 11px;
-            color: var(--mint);
-            margin-bottom: 12px;
-            text-align: left;
-            white-space: pre-wrap;
-            word-break: break-all;
-            user-select: text;
-            -webkit-user-select: text;
-        }
-
-        .log-btn-group {
-            display: flex;
-            gap: 10px;
-            width: 90%;
-            max-width: 380px;
-            justify-content: center;
-        }
 
         /* 上部ヘッダー */
         #game-header {

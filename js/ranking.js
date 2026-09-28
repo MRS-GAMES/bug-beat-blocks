@@ -200,7 +200,6 @@ async function startOnlinePlay() {
             if (requestSequence === playStartSequence) activePlayToken = response.playToken;
             return response.playToken;
         } catch (error) {
-            addLog(`Ranking play start failed: ${error.message}`);
             return null;
         }
     })();

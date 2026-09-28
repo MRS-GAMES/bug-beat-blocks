@@ -10,7 +10,7 @@ function getGhostY() {
 function drawGame() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (gameState !== 'PLAYING' && gameState !== 'CLEARING' && gameState !== 'PAUSED' && gameState !== 'LOGS' && gameState !== 'GAMEOVER' && gameState !== 'STAGECLEAR') return;
+    if (gameState !== 'PLAYING' && gameState !== 'CLEARING' && gameState !== 'PAUSED' && gameState !== 'GAMEOVER' && gameState !== 'STAGECLEAR') return;
 
     ctx.fillStyle = '#1a0f3d';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -148,7 +148,7 @@ function drawGame() {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
-    if (gameState === 'PAUSED' || gameState === 'LOGS') {
+    if (gameState === 'PAUSED') {
         ctx.fillStyle = 'rgba(20,10,45,0.55)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
     }

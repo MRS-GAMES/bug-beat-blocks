@@ -71,7 +71,6 @@ const sandbox = {
     setTimeout: callback => callback(),
     clearTimeout() {},
     changeScreen: state => { sandbox.screenState = state; },
-    addLog: message => { sandbox.lastLog = message; },
     fetch: async (url, options = {}) => {
         fetchCalls.push({ url, options });
         if (url === '/api/player-name') {

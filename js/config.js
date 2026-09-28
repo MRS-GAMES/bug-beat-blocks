@@ -262,13 +262,6 @@ let eggBatSequence = 0;
 
 let chainCount = 0;
 
-let devLogs = [];
-function addLog(msg) {
-    const timeStr = new Date().toTimeString().split(' ')[0];
-    devLogs.push(`[${timeStr}] ${msg}`);
-    if (devLogs.length > 100) devLogs.shift();
-}
-
 class Piece {
     constructor(type) {
         this.type = type;
