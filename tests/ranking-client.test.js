@@ -43,6 +43,8 @@ function getElement(id) {
 const storage = new Map();
 const fetchCalls = [];
 const monthKey = '2026-09';
+let failNextPlayerName = false;
+let recordsPlayerName = 'ALT1';
 const sandbox = {
     assert,
     console,
@@ -52,7 +54,6 @@ const sandbox = {
     Promise,
     URLSearchParams,
     MAX_PLAYABLE_LEVEL: 100,
-    MIN_RANKING_SCORE: 5000,
     window: {
         localStorage: {
             getItem: key => storage.has(key) ? storage.get(key) : null,
@@ -75,20 +76,27 @@ const sandbox = {
         fetchCalls.push({ url, options });
         if (url === '/api/player-name') {
             const body = JSON.parse(options.body);
-            return { ok: true, status: 200, json: async () => ({ monthKey, playerName: body.playerName }) };
+            if (failNextPlayerName) {
+                failNextPlayerName = false;
+                return {
+                    ok: false,
+                    status: 503,
+                    json: async () => ({ code: 'INTERNAL_ERROR', message: '通信エラー' })
+                };
+            }
+            return { ok: true, status: 200, json: async () => ({ playerName: body.playerName }) };
         }
         if (url === '/api/play/start') {
             return { ok: true, status: 200, json: async () => ({ monthKey, playToken: 'play-token-1' }) };
         }
         if (url === '/api/records') {
-            return { ok: true, status: 200, json: async () => ({ monthKey, scoreRank: 3, levelRank: 4 }) };
+            return { ok: true, status: 200, json: async () => ({ playerName: recordsPlayerName, scoreRank: 3, levelRank: 4 }) };
         }
         if (url.startsWith('/api/rankings?')) {
             return {
                 ok: true,
                 status: 200,
                 json: async () => ({
-                    monthKey,
                     entries: [{ rank: 1, playerName: 'AAA', level: 12, score: 5000, isOwn: false }],
                     ownEntry: null
                 })
@@ -111,13 +119,16 @@ load('js/ranking.js');
     vm.runInContext(`
         globalThis.resultFlowCompleted = false;
         openRankingResultNameScreen(
-            { score: 12400, level: 9, bestScore: 12400 },
+            { score: 12400, level: 9, clearedStages: 1, bestScore: 12400 },
             { onComplete: () => { globalThis.resultFlowCompleted = true; } }
         );
     `, sandbox);
     assert.equal(sandbox.screenState, 'PLAYER_NAME');
     assert.equal(getElement('player-name-input').value, '');
     assert.match(getElement('player-name-prompt').innerText, /Lv9/);
+    assert.match(getElement('player-name-prompt').innerText, /ユーザー名を登録してください/);
+    assert.equal(getElement('player-name-cancel-btn').classList.contains('hidden'), true);
+    assert.equal(getElement('player-name-save-btn').innerText, 'ランキング登録して次へ');
 
     const fetchCountBeforeSuggestion = fetchCalls.length;
     vm.runInContext(`renderNameSuggestions(['ALT1'])`, sandbox);
@@ -129,13 +140,56 @@ load('js/ranking.js');
     await vm.runInContext(`submitPlayerName(document.getElementById('player-name-input').value)`, sandbox);
     assert.equal(vm.runInContext('getCurrentPlayerName()', sandbox), 'ALT1');
     assert.equal(sandbox.resultFlowCompleted, true);
-    assert.equal(getElement('result-ranking-status').innerText, '月間 SCORE 3位 / LEVEL 4位');
+    assert.equal(getElement('result-ranking-status').innerText, '歴代 SCORE 3位 / LEVEL 4位');
     assert.equal(vm.runInContext('loadPlayerData().pendingSubmissions.length', sandbox), 0);
 
     await vm.runInContext('refreshRankingScreen()', sandbox);
     assert.equal(getElement('ranking-list').children.length, 1);
     assert.equal(getElement('ranking-message').classList.contains('hidden'), true);
     assert.equal(getElement('ranking-player-name').innerText, 'ALT1');
+
+    assert.equal(
+        vm.runInContext(`shouldOfferRankingEntry({ score: 9000, level: 8, clearedStages: 1, isNewRankingScore: false, isNewRankingLevel: false })`, sandbox),
+        false,
+        'an existing player does not see the entry screen for a lower result'
+    );
+    assert.equal(
+        vm.runInContext(`shouldOfferRankingEntry({ score: 13000, level: 8, clearedStages: 1, isNewRankingScore: true, isNewRankingLevel: false })`, sandbox),
+        true,
+        'a new best score can be submitted'
+    );
+    assert.equal(
+        vm.runInContext(`shouldOfferRankingEntry({ score: 9000, level: 10, clearedStages: 1, isNewRankingScore: false, isNewRankingLevel: true })`, sandbox),
+        true,
+        'a new best level can be submitted even if the score is lower'
+    );
+    assert.equal(
+        vm.runInContext(`shouldOfferRankingEntry({ score: 50000, level: 0, clearedStages: 0, isNewRankingScore: true, isNewRankingLevel: false })`, sandbox),
+        false,
+        'a high score without a stage clear is not eligible'
+    );
+
+    await vm.runInContext(`
+        const dataForAutomaticName = loadPlayerData();
+        dataForAutomaticName.playerName = '';
+        dataForAutomaticName.playerNameMonth = '';
+        savePlayerData(dataForAutomaticName);
+        playerNameVerified = false;
+        startOnlinePlay();
+    `, sandbox);
+    recordsPlayerName = '00001';
+    failNextPlayerName = true;
+    vm.runInContext(`
+        globalThis.automaticNameFlowCompleted = false;
+        openRankingResultNameScreen(
+            { score: 15000, level: 11, clearedStages: 1, bestScore: 15000, isNewScore: true, isNewLevel: true },
+            { onComplete: () => { globalThis.automaticNameFlowCompleted = true; } }
+        );
+        document.getElementById('player-name-input').value = 'ERROR';
+    `, sandbox);
+    await vm.runInContext(`submitRankingEntry()`, sandbox);
+    assert.equal(sandbox.automaticNameFlowCompleted, true);
+    assert.equal(vm.runInContext('getCurrentPlayerName()', sandbox), '00001');
 
     assert.equal(fetchCalls.some(call => call.url === '/api/player-name'), true);
     assert.equal(fetchCalls.some(call => call.url === '/api/play/start'), true);

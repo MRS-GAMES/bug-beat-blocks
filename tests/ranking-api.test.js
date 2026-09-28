@@ -40,6 +40,8 @@ class D1Mock {
         this.database = new DatabaseSync(':memory:');
         this.database.exec('PRAGMA foreign_keys = ON');
         this.database.exec(fs.readFileSync(path.join(root, 'migrations/0001_monthly_rankings.sql'), 'utf8'));
+        this.database.exec(fs.readFileSync(path.join(root, 'migrations/0002_all_time_rankings.sql'), 'utf8'));
+        this.database.exec(fs.readFileSync(path.join(root, 'migrations/0003_require_stage_clear.sql'), 'utf8'));
     }
 
     prepare(sql) {
@@ -60,6 +62,40 @@ class D1Mock {
 }
 
 async function main() {
+    const migrationDb = new DatabaseSync(':memory:');
+    migrationDb.exec('PRAGMA foreign_keys = ON');
+    migrationDb.exec(fs.readFileSync(path.join(root, 'migrations/0001_monthly_rankings.sql'), 'utf8'));
+    migrationDb.prepare(`
+        INSERT INTO monthly_players
+            (month_key, device_hash, player_name, claim_ip_hash, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?)
+    `).run(
+        '2026-08', 'legacy-device', 'OLD1', 'legacy-ip', 100, 100,
+        '2026-09', 'legacy-device', 'NEW1', 'legacy-ip', 200, 200
+    );
+    migrationDb.prepare(`
+        INSERT INTO monthly_records
+            (month_key, device_hash, best_score, score_run_level, best_level,
+             level_run_score, score_recorded_at, level_recorded_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+        '2026-08', 'legacy-device', 15000, 8, 8, 15000, 110, 110, 110,
+        '2026-09', 'legacy-device', 12000, 10, 10, 12000, 210, 210, 210
+    );
+    migrationDb.exec(fs.readFileSync(path.join(root, 'migrations/0002_all_time_rankings.sql'), 'utf8'));
+    migrationDb.exec(fs.readFileSync(path.join(root, 'migrations/0003_require_stage_clear.sql'), 'utf8'));
+    assert.equal(
+        migrationDb.prepare('SELECT player_name FROM players WHERE device_hash = ?').get('legacy-device').player_name,
+        'NEW1',
+        'migration keeps the most recently used player name'
+    );
+    assert.equal(
+        migrationDb.prepare('SELECT COUNT(*) AS count FROM all_time_records').get().count,
+        0,
+        'unverifiable pre-clear-requirement ranking records are reset'
+    );
+    migrationDb.close();
+
     const moduleUrl = `${pathToFileURL(path.join(root, 'functions/api/[[path]].js')).href}?test=${Date.now()}`;
     const { onRequest } = await import(moduleUrl);
     const db = new D1Mock();
@@ -158,15 +194,27 @@ async function main() {
         method: 'POST',
         body: { deviceId: anonymousDevice, playToken: anonymousStart.data.playToken, score: 5000, level: 1 }
     });
-    assert.equal(anonymousResult.status, 409);
-    assert.equal(anonymousResult.data.code, 'NAME_REQUIRED');
+    assert.equal(anonymousResult.status, 200);
+    assert.match(anonymousResult.data.playerName, /^\d{5}$/);
+    const automaticName = anonymousResult.data.playerName;
+    const anonymousRanking = await api(`rankings?type=score&deviceId=${anonymousDevice}`);
+    assert.equal(anonymousRanking.data.ownEntry.playerName, automaticName);
+
+    response = await api('player-name', {
+        method: 'POST',
+        body: { deviceId: anonymousDevice, playerName: 'NAMED' },
+        deviceIp: '192.0.2.3'
+    });
+    assert.equal(response.status, 200);
+    const renamedAnonymousRanking = await api(`rankings?type=score&deviceId=${anonymousDevice}`);
+    assert.equal(renamedAnonymousRanking.data.ownEntry.playerName, 'NAMED');
 
     response = await api('player-name', { method: 'POST', body: { deviceId: device1, playerName: 'mrs1' } });
     assert.equal(response.status, 200);
     assert.equal(response.data.playerName, 'MRS1');
 
     const storedPlayer = db.database.prepare(
-        'SELECT claim_ip_hash FROM monthly_players WHERE player_name = ?'
+        'SELECT claim_ip_hash FROM players WHERE player_name = ?'
     ).get('MRS1');
     const encoder = new TextEncoder();
     const hmacKey = await crypto.subtle.importKey(
@@ -201,9 +249,14 @@ async function main() {
 
     const result1 = { deviceId: device1, playToken: start1.data.playToken, score: 10000, level: 5 };
     const result2 = { deviceId: device2, playToken: start2.data.playToken, score: 12000, level: 4 };
-    response = await api('records', { method: 'POST', body: { ...result1, score: 4999 } });
-    assert.equal(response.status, 422);
-    assert.equal(response.data.code, 'MIN_SCORE_REQUIRED');
+    response = await api('records', { method: 'POST', body: { ...result1, score: 100 } });
+    assert.equal(response.status, 200, 'a score below 5000 is eligible after clearing a stage');
+    const start1Upgrade = await api('play/start', {
+        method: 'POST',
+        body: { deviceId: device1 },
+        deviceIp: '192.0.2.1'
+    });
+    result1.playToken = start1Upgrade.data.playToken;
     response = await api('records', { method: 'POST', body: result1 });
     assert.equal(response.status, 200);
     response = await api('records', { method: 'POST', body: result2 });
@@ -211,12 +264,12 @@ async function main() {
 
     const scoreRanking = await api(`rankings?type=score&deviceId=${device1}`);
     assert.equal(scoreRanking.status, 200);
-    assert.deepEqual(scoreRanking.data.entries.map(entry => entry.score), [12000, 10000]);
+    assert.deepEqual(scoreRanking.data.entries.map(entry => entry.score), [12000, 10000, 5000]);
     assert.equal(scoreRanking.data.ownEntry.rank, 2);
 
     const levelRanking = await api(`rankings?type=level&deviceId=${device1}`);
     assert.equal(levelRanking.status, 200);
-    assert.deepEqual(levelRanking.data.entries.map(entry => entry.level), [5, 4]);
+    assert.deepEqual(levelRanking.data.entries.map(entry => entry.level), [5, 4, 1]);
     assert.equal(levelRanking.data.ownEntry.rank, 1);
 
     response = await api('records', { method: 'POST', body: result1 });
@@ -224,10 +277,45 @@ async function main() {
     response = await api('records', { method: 'POST', body: { ...result1, score: 9999 } });
     assert.equal(response.status, 409, 'used play token cannot submit another result');
 
+    const noClearStart = await api('play/start', {
+        method: 'POST',
+        body: { deviceId: device1 },
+        deviceIp: '192.0.2.1'
+    });
+    response = await api('records', {
+        method: 'POST',
+        body: { deviceId: device1, playToken: noClearStart.data.playToken, score: 50000, level: 0 }
+    });
+    assert.equal(response.status, 400);
+    assert.equal(response.data.code, 'INVALID_RESULT', 'a run without a cleared stage cannot be ranked');
+
     response = await api('player-name', { method: 'POST', body: { deviceId: device1, playerName: 'NEW1' } });
     assert.equal(response.status, 200);
     const renamedRanking = await api('rankings?type=level');
     assert.equal(renamedRanking.data.entries[0].playerName, 'NEW1');
+
+    response = await api('player-name', { method: 'POST', body: { deviceId: 'device-00000003', playerName: 'MRS1' } });
+    assert.equal(response.status, 200, 'renaming releases the old name globally');
+
+    const bulkPlayer = db.database.prepare(`
+        INSERT INTO players (device_hash, player_name, claim_ip_hash, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+    `);
+    const bulkRecord = db.database.prepare(`
+        INSERT INTO all_time_records (
+            device_hash, best_score, score_run_level, best_level, level_run_score,
+            score_recorded_at, level_recorded_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (let index = 0; index < 101; index += 1) {
+        const deviceHash = `bulk-device-${index}`;
+        bulkPlayer.run(deviceHash, `T${String(index).padStart(4, '0')}`, 'bulk-ip', index, index);
+        bulkRecord.run(deviceHash, 20000 + index, 20, 20, 20000 + index, index, index, index);
+    }
+    const top100 = await api('rankings?type=score');
+    assert.equal(top100.status, 200);
+    assert.equal(top100.data.entries.length, 100, 'all-time ranking publishes the top 100');
+    assert.equal(top100.data.entries[0].score, 20100);
 
     const levelBoundaryDevice = 'device-level-boundary';
     response = await api('player-name', {

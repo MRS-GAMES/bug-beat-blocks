@@ -78,6 +78,9 @@ vm.runInContext(`
     function setupStage(level) { setupCalls.push(level); }
     function checkCollisionAt() { return false; }
     function submitCurrentRankingResult() {}
+    function openRankingResultNameScreen(result, options) {
+        if (typeof options.onComplete === 'function') options.onComplete();
+    }
     function startOnlinePlay() {}
     function refreshRankingScreen() {}
 `, sandbox);
@@ -100,8 +103,20 @@ vm.runInContext(`
     assert.equal(document.getElementById('personal-best-score').innerText, '12,345');
     assert.equal(document.getElementById('personal-best-level').innerText, 'Lv42');
 
+    resetRunProgress();
+    selectedLevel = 30;
+    score = 100;
+    changeScreen('GAMEOVER');
+    assert.equal(window.currentGameResult.level, 0, 'an uncleared starting level is not saved as a best level');
+    assert.equal(window.currentGameResult.clearedStages, 0);
+    assert.equal(document.getElementById('result-level').innerText, '―');
+    assert.match(document.getElementById('result-ranking-status').innerText, /1ステージ以上/);
+
+    resetRunProgress();
     selectedLevel = 30;
     changeScreen('STAGECLEAR');
+    assert.equal(highestClearedLevelThisRun, 30);
+    assert.equal(clearedStagesThisRun, 1);
     assert.equal(loadHighestEndlessLevel(), 31);
     assert.equal(document.getElementById('overlay-action-btn').innerText, 'NEXT STAGE');
     document.getElementById('overlay-action-btn').onclick();

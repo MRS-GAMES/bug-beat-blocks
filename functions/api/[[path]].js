@@ -2,7 +2,6 @@ const JSON_HEADERS = {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store'
 };
-const MIN_RANKING_SCORE = 5000;
 const MAX_RANKING_LEVEL = 100;
 
 function json(data, status = 200) {
@@ -76,7 +75,7 @@ function createSuggestionCandidates(baseName) {
     return [...candidates];
 }
 
-async function findAvailableSuggestions(db, monthKey, baseName) {
+async function findAvailableSuggestions(db, baseName) {
     const candidates = createSuggestionCandidates(baseName);
     const usedNames = new Set();
     const queryChunkSize = 50;
@@ -84,18 +83,18 @@ async function findAvailableSuggestions(db, monthKey, baseName) {
         const chunk = candidates.slice(index, index + queryChunkSize);
         const placeholders = chunk.map(() => '?').join(',');
         const used = await db.prepare(
-            `SELECT player_name FROM monthly_players WHERE month_key = ? AND player_name IN (${placeholders})`
-        ).bind(monthKey, ...chunk).all();
+            `SELECT player_name FROM players WHERE player_name IN (${placeholders})`
+        ).bind(...chunk).all();
         (used.results || []).forEach(row => usedNames.add(row.player_name));
     }
     return candidates.filter(name => !usedNames.has(name)).slice(0, 3);
 }
 
-async function nameTakenResponse(db, monthKey, playerName) {
+async function nameTakenResponse(db, playerName) {
     return json({
         code: 'NAME_TAKEN',
-        message: 'その名前は今月すでに使われています',
-        suggestions: await findAvailableSuggestions(db, monthKey, playerName)
+        message: 'その名前はすでに使われています',
+        suggestions: await findAvailableSuggestions(db, playerName)
     }, 409);
 }
 
@@ -109,23 +108,22 @@ async function handlePlayerName(context) {
     }
 
     const db = context.env.RANKINGS_DB;
-    const monthKey = getJstMonthKey();
     const deviceHash = await sha256(body.deviceId);
     const now = Date.now();
     const ip = context.request.headers.get('CF-Connecting-IP') || 'unknown';
     const ipHash = await hmacSha256(getIpHashKey(context), ip);
     const existingPlayer = await db.prepare(
-        'SELECT player_name FROM monthly_players WHERE month_key = ? AND device_hash = ?'
-    ).bind(monthKey, deviceHash).first();
+        'SELECT player_name FROM players WHERE device_hash = ?'
+    ).bind(deviceHash).first();
     const nameOwner = await db.prepare(
-        'SELECT device_hash FROM monthly_players WHERE month_key = ? AND player_name = ?'
-    ).bind(monthKey, playerName).first();
+        'SELECT device_hash FROM players WHERE player_name = ?'
+    ).bind(playerName).first();
     if (nameOwner && nameOwner.device_hash !== deviceHash) {
-        return nameTakenResponse(db, monthKey, playerName);
+        return nameTakenResponse(db, playerName);
     }
     if (!existingPlayer) {
         const recentClaims = await db.prepare(`
-            SELECT COUNT(*) AS count FROM monthly_players
+            SELECT COUNT(*) AS count FROM players
             WHERE claim_ip_hash = ? AND created_at >= ?
         `).bind(ipHash, now - 60000).first();
         if (Number(recentClaims?.count || 0) >= 10) {
@@ -134,19 +132,19 @@ async function handlePlayerName(context) {
     }
     try {
         await db.prepare(`
-            INSERT INTO monthly_players (month_key, device_hash, player_name, claim_ip_hash, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(month_key, device_hash) DO UPDATE SET
+            INSERT INTO players (device_hash, player_name, claim_ip_hash, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(device_hash) DO UPDATE SET
                 player_name = excluded.player_name,
                 updated_at = excluded.updated_at
-        `).bind(monthKey, deviceHash, playerName, ipHash, now, now).run();
-        return json({ monthKey, playerName });
+        `).bind(deviceHash, playerName, ipHash, now, now).run();
+        return json({ playerName });
     } catch (error) {
         const conflictingPlayer = await db.prepare(
-            'SELECT device_hash FROM monthly_players WHERE month_key = ? AND player_name = ?'
-        ).bind(monthKey, playerName).first();
+            'SELECT device_hash FROM players WHERE player_name = ?'
+        ).bind(playerName).first();
         if (!conflictingPlayer || conflictingPlayer.device_hash === deviceHash) throw error;
-        return nameTakenResponse(db, monthKey, playerName);
+        return nameTakenResponse(db, playerName);
     }
 }
 
@@ -180,74 +178,104 @@ async function handlePlayStart(context) {
 }
 
 const UPSERT_RECORD_SQL = `
-    INSERT INTO monthly_records (
-        month_key, device_hash, best_score, score_run_level,
+    INSERT INTO all_time_records (
+        device_hash, best_score, score_run_level,
         best_level, level_run_score, score_recorded_at, level_recorded_at, updated_at
     )
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?
     FROM play_sessions
     WHERE token_hash = ? AND used_at IS NULL
-    ON CONFLICT(month_key, device_hash) DO UPDATE SET
+    ON CONFLICT(device_hash) DO UPDATE SET
         best_score = CASE
-            WHEN excluded.best_score > monthly_records.best_score
-              OR (excluded.best_score = monthly_records.best_score AND excluded.score_run_level > monthly_records.score_run_level)
-            THEN excluded.best_score ELSE monthly_records.best_score END,
+            WHEN excluded.best_score > all_time_records.best_score
+              OR (excluded.best_score = all_time_records.best_score AND excluded.score_run_level > all_time_records.score_run_level)
+            THEN excluded.best_score ELSE all_time_records.best_score END,
         score_run_level = CASE
-            WHEN excluded.best_score > monthly_records.best_score
-              OR (excluded.best_score = monthly_records.best_score AND excluded.score_run_level > monthly_records.score_run_level)
-            THEN excluded.score_run_level ELSE monthly_records.score_run_level END,
+            WHEN excluded.best_score > all_time_records.best_score
+              OR (excluded.best_score = all_time_records.best_score AND excluded.score_run_level > all_time_records.score_run_level)
+            THEN excluded.score_run_level ELSE all_time_records.score_run_level END,
         score_recorded_at = CASE
-            WHEN excluded.best_score > monthly_records.best_score
-              OR (excluded.best_score = monthly_records.best_score AND excluded.score_run_level > monthly_records.score_run_level)
-            THEN excluded.score_recorded_at ELSE monthly_records.score_recorded_at END,
+            WHEN excluded.best_score > all_time_records.best_score
+              OR (excluded.best_score = all_time_records.best_score AND excluded.score_run_level > all_time_records.score_run_level)
+            THEN excluded.score_recorded_at ELSE all_time_records.score_recorded_at END,
         best_level = CASE
-            WHEN excluded.best_level > monthly_records.best_level
-              OR (excluded.best_level = monthly_records.best_level AND excluded.level_run_score > monthly_records.level_run_score)
-            THEN excluded.best_level ELSE monthly_records.best_level END,
+            WHEN excluded.best_level > all_time_records.best_level
+              OR (excluded.best_level = all_time_records.best_level AND excluded.level_run_score > all_time_records.level_run_score)
+            THEN excluded.best_level ELSE all_time_records.best_level END,
         level_run_score = CASE
-            WHEN excluded.best_level > monthly_records.best_level
-              OR (excluded.best_level = monthly_records.best_level AND excluded.level_run_score > monthly_records.level_run_score)
-            THEN excluded.level_run_score ELSE monthly_records.level_run_score END,
+            WHEN excluded.best_level > all_time_records.best_level
+              OR (excluded.best_level = all_time_records.best_level AND excluded.level_run_score > all_time_records.level_run_score)
+            THEN excluded.level_run_score ELSE all_time_records.level_run_score END,
         level_recorded_at = CASE
-            WHEN excluded.best_level > monthly_records.best_level
-              OR (excluded.best_level = monthly_records.best_level AND excluded.level_run_score > monthly_records.level_run_score)
-            THEN excluded.level_recorded_at ELSE monthly_records.level_recorded_at END,
+            WHEN excluded.best_level > all_time_records.best_level
+              OR (excluded.best_level = all_time_records.best_level AND excluded.level_run_score > all_time_records.level_run_score)
+            THEN excluded.level_recorded_at ELSE all_time_records.level_recorded_at END,
         updated_at = excluded.updated_at
 `;
 
-async function getRecordRanks(db, monthKey, deviceHash) {
+async function getRecordRanks(db, deviceHash) {
     const record = await db.prepare(
-        `SELECT * FROM monthly_records
-         WHERE month_key = ? AND device_hash = ? AND best_score >= ${MIN_RANKING_SCORE}`
-    ).bind(monthKey, deviceHash).first();
+        `SELECT * FROM all_time_records
+         WHERE device_hash = ?`
+    ).bind(deviceHash).first();
     if (!record) return { scoreRank: null, levelRank: null };
     const [scoreAhead, levelAhead] = await Promise.all([
         db.prepare(`
-            SELECT COUNT(*) AS count FROM monthly_records
-            WHERE month_key = ? AND best_score >= ${MIN_RANKING_SCORE} AND (
+            SELECT COUNT(*) AS count FROM all_time_records
+            WHERE (
                 best_score > ? OR
                 (best_score = ? AND score_run_level > ?) OR
                 (best_score = ? AND score_run_level = ? AND score_recorded_at < ?) OR
                 (best_score = ? AND score_run_level = ? AND score_recorded_at = ? AND device_hash < ?)
             )
-        `).bind(monthKey, record.best_score, record.best_score, record.score_run_level,
+        `).bind(record.best_score, record.best_score, record.score_run_level,
             record.best_score, record.score_run_level, record.score_recorded_at,
             record.best_score, record.score_run_level, record.score_recorded_at, deviceHash).first(),
         db.prepare(`
-            SELECT COUNT(*) AS count FROM monthly_records
-            WHERE month_key = ? AND best_score >= ${MIN_RANKING_SCORE} AND (
+            SELECT COUNT(*) AS count FROM all_time_records
+            WHERE (
                 best_level > ? OR
                 (best_level = ? AND level_run_score > ?) OR
                 (best_level = ? AND level_run_score = ? AND level_recorded_at < ?) OR
                 (best_level = ? AND level_run_score = ? AND level_recorded_at = ? AND device_hash < ?)
             )
-        `).bind(monthKey, record.best_level, record.best_level, record.level_run_score,
+        `).bind(record.best_level, record.best_level, record.level_run_score,
             record.best_level, record.level_run_score, record.level_recorded_at,
             record.best_level, record.level_run_score, record.level_recorded_at, deviceHash).first()
     ]);
     return {
         scoreRank: Number(scoreAhead?.count || 0) + 1,
         levelRank: Number(levelAhead?.count || 0) + 1
+    };
+}
+
+async function claimAutomaticPlayer(db, deviceHash, ipHash, now) {
+    const baseNumber = Number.parseInt(deviceHash.slice(0, 8), 16) % 100000;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+        const playerName = String((baseNumber + attempt) % 100000).padStart(5, '0');
+        try {
+            await db.prepare(`
+                INSERT INTO players (device_hash, player_name, claim_ip_hash, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+            `).bind(deviceHash, playerName, ipHash, now, now).run();
+            return { player_name: playerName };
+        } catch (error) {
+            const existingPlayer = await db.prepare(
+                'SELECT player_name FROM players WHERE device_hash = ?'
+            ).bind(deviceHash).first();
+            if (existingPlayer) return existingPlayer;
+        }
+    }
+    throw new Error('Automatic player name pool is temporarily unavailable');
+}
+
+async function getRecordResponse(db, deviceHash) {
+    const player = await db.prepare(
+        'SELECT player_name FROM players WHERE device_hash = ?'
+    ).bind(deviceHash).first();
+    return {
+        playerName: player?.player_name || null,
+        ...(await getRecordRanks(db, deviceHash))
     };
 }
 
@@ -262,13 +290,6 @@ async function handleRecords(context) {
     if (!Number.isInteger(score) || score < 0 || score > 1000000000 || !Number.isInteger(level) || level < 1 || level > MAX_RANKING_LEVEL) {
         return json({ code: 'INVALID_RESULT', message: '記録の値が不正です' }, 400);
     }
-    if (score < MIN_RANKING_SCORE) {
-        return json({
-            code: 'MIN_SCORE_REQUIRED',
-            message: `ランキングは${MIN_RANKING_SCORE}点以上から登録できます`
-        }, 422);
-    }
-
     const db = context.env.RANKINGS_DB;
     const tokenHash = await sha256(body.playToken);
     const deviceHash = await sha256(body.deviceId);
@@ -276,27 +297,27 @@ async function handleRecords(context) {
     if (!session || session.device_hash !== deviceHash) return json({ code: 'INVALID_PLAY', message: 'プレイ情報が無効です' }, 409);
     if (session.used_at) {
         if (Number(session.result_score) === score && Number(session.result_level) === level) {
-            return json({ monthKey: session.month_key, ...(await getRecordRanks(db, session.month_key, deviceHash)) });
+            return json(await getRecordResponse(db, deviceHash));
         }
         return json({ code: 'PLAY_ALREADY_USED', message: 'このプレイは送信済みです' }, 409);
     }
     if (Number(session.expires_at) < Date.now()) return json({ code: 'PLAY_EXPIRED', message: 'プレイ情報の期限が切れています' }, 409);
 
-    const player = await db.prepare(
-        'SELECT player_name FROM monthly_players WHERE month_key = ? AND device_hash = ?'
-    ).bind(session.month_key, deviceHash).first();
-    if (!player) return json({ code: 'NAME_REQUIRED' }, 409);
+    let player = await db.prepare(
+        'SELECT player_name FROM players WHERE device_hash = ?'
+    ).bind(deviceHash).first();
     const now = Date.now();
+    if (!player) player = await claimAutomaticPlayer(db, deviceHash, session.ip_hash, now);
     await db.batch([
         db.prepare(UPSERT_RECORD_SQL).bind(
-            session.month_key, deviceHash, score, level, level, score, now, now, now, tokenHash
+            deviceHash, score, level, level, score, now, now, now, tokenHash
         ),
         db.prepare(`
             UPDATE play_sessions SET used_at = ?, result_score = ?, result_level = ?
             WHERE token_hash = ? AND used_at IS NULL
         `).bind(now, score, level, tokenHash)
     ]);
-    return json({ monthKey: session.month_key, ...(await getRecordRanks(db, session.month_key, deviceHash)) });
+    return json({ playerName: player.player_name, ...(await getRecordRanks(db, deviceHash)) });
 }
 
 async function handleRankings(context) {
@@ -305,19 +326,17 @@ async function handleRankings(context) {
     const type = url.searchParams.get('type') === 'level' ? 'level' : 'score';
     const deviceId = url.searchParams.get('deviceId');
     const deviceHash = validateDeviceId(deviceId) ? await sha256(deviceId) : null;
-    const monthKey = getJstMonthKey();
     const order = type === 'score'
         ? 'r.best_score DESC, r.score_run_level DESC, r.score_recorded_at ASC, r.device_hash ASC'
         : 'r.best_level DESC, r.level_run_score DESC, r.level_recorded_at ASC, r.device_hash ASC';
     const rows = await context.env.RANKINGS_DB.prepare(`
         SELECT p.player_name, p.device_hash,
             r.best_score, r.score_run_level, r.best_level, r.level_run_score
-        FROM monthly_records r
-        JOIN monthly_players p ON p.month_key = r.month_key AND p.device_hash = r.device_hash
-        WHERE r.month_key = ? AND r.best_score >= ${MIN_RANKING_SCORE}
+        FROM all_time_records r
+        JOIN players p ON p.device_hash = r.device_hash
         ORDER BY ${order}
-        LIMIT 30
-    `).bind(monthKey).all();
+        LIMIT 100
+    `).bind().all();
 
     const entries = (rows.results || []).map((row, index) => ({
         rank: index + 1,
@@ -329,12 +348,12 @@ async function handleRankings(context) {
 
     let ownEntry = entries.find(entry => entry.isOwn) || null;
     if (!ownEntry && deviceHash) {
-        const ranks = await getRecordRanks(context.env.RANKINGS_DB, monthKey, deviceHash);
+        const ranks = await getRecordRanks(context.env.RANKINGS_DB, deviceHash);
         const own = await context.env.RANKINGS_DB.prepare(`
-            SELECT p.player_name, r.* FROM monthly_records r
-            JOIN monthly_players p ON p.month_key = r.month_key AND p.device_hash = r.device_hash
-            WHERE r.month_key = ? AND r.device_hash = ? AND r.best_score >= ${MIN_RANKING_SCORE}
-        `).bind(monthKey, deviceHash).first();
+            SELECT p.player_name, r.* FROM all_time_records r
+            JOIN players p ON p.device_hash = r.device_hash
+            WHERE r.device_hash = ?
+        `).bind(deviceHash).first();
         if (own) {
             ownEntry = {
                 rank: type === 'score' ? ranks.scoreRank : ranks.levelRank,
@@ -342,12 +361,12 @@ async function handleRankings(context) {
                 level: type === 'score' ? own.score_run_level : own.best_level,
                 score: type === 'score' ? own.best_score : own.level_run_score,
                 isOwn: true,
-                inTop30: false
+                inTop100: false
             };
         }
     }
-    if (ownEntry && ownEntry.inTop30 !== false) ownEntry = { ...ownEntry, inTop30: true };
-    return json({ monthKey, type, entries, ownEntry });
+    if (ownEntry && ownEntry.inTop100 !== false) ownEntry = { ...ownEntry, inTop100: true };
+    return json({ type, entries, ownEntry });
 }
 
 export async function onRequest(context) {

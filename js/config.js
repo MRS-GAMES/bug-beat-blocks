@@ -174,7 +174,6 @@ const LEVEL_CONFIG = {
 const MAX_SELECTABLE_LEVEL = 30;
 const MAX_PLAYABLE_LEVEL = 100;
 const MAX_LEVEL = MAX_PLAYABLE_LEVEL;
-const MIN_RANKING_SCORE = 5000;
 const ENDLESS_PLACEMENT_START_ROW = 6;
 const ENDLESS_PLACEMENT_EXPANSION_INTERVAL = 8;
 const ENDLESS_GUARANTEED = ['white', 'color', 'metal', 'metal', 'egg', 'egg', 'egg', 'batWhite', 'batColor', 'batMetal'];
@@ -226,6 +225,8 @@ function initAudio() {
 let gameState = 'TITLE';
 let selectedLevel = 1;
 let score = 0;
+let highestClearedLevelThisRun = 0;
+let clearedStagesThisRun = 0;
 let remainingEnemies = 0;
 let board = [];
 let groupBoard = [];
@@ -261,6 +262,18 @@ let eggTurnCheckPending = false;
 let eggBatSequence = 0;
 
 let chainCount = 0;
+
+function resetRunProgress() {
+    highestClearedLevelThisRun = 0;
+    clearedStagesThisRun = 0;
+}
+
+function markStageCleared(level) {
+    const safeLevel = Math.max(1, Math.min(MAX_PLAYABLE_LEVEL, Math.floor(Number(level) || 1)));
+    if (safeLevel <= highestClearedLevelThisRun) return;
+    highestClearedLevelThisRun = safeLevel;
+    clearedStagesThisRun += 1;
+}
 
 class Piece {
     constructor(type) {

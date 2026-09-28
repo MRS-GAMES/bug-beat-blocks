@@ -3,6 +3,7 @@ let activePlayToken = null;
 let playStartSequence = 0;
 let activePlayStartPromise = Promise.resolve(null);
 let playerNameFlow = null;
+let playerNameVerified = false;
 
 async function requestRankingApi(path, options = {}) {
     const response = await fetch(path, {
@@ -27,11 +28,6 @@ function normalizePlayerNameInput(value) {
     return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
 }
 
-function formatRankingMonth(monthKey = getJstMonthKey()) {
-    const [year, month] = monthKey.split('-');
-    return `${year}年${Number(month)}月`;
-}
-
 function updateRankingPlayerName() {
     const button = document.getElementById('ranking-player-name');
     const playerName = getCurrentPlayerName();
@@ -41,15 +37,22 @@ function updateRankingPlayerName() {
 
 async function reclaimSavedPlayerName() {
     const data = loadPlayerData();
-    if (getCurrentPlayerName() || !data.playerName) return Boolean(getCurrentPlayerName());
+    if (!data.playerName) return false;
+    if (playerNameVerified) return true;
     try {
         const response = await requestRankingApi('/api/player-name', {
             method: 'POST',
             body: JSON.stringify({ deviceId: data.deviceId, playerName: data.playerName })
         });
-        saveRegisteredPlayerName(response.playerName, response.monthKey);
+        saveRegisteredPlayerName(response.playerName);
+        playerNameVerified = true;
         return true;
     } catch (error) {
+        if (error.code === 'NAME_TAKEN') {
+            data.playerName = '';
+            data.playerNameMonth = '';
+            savePlayerData(data);
+        }
         return false;
     }
 }
@@ -57,22 +60,26 @@ async function reclaimSavedPlayerName() {
 function openPlayerNameScreen(options = {}) {
     const data = loadPlayerData();
     const input = document.getElementById('player-name-input');
-    input.value = data.playerName || '';
+    const currentPlayerName = getCurrentPlayerName();
+    input.value = currentPlayerName || '';
     document.getElementById('player-name-error').innerText = '';
     document.getElementById('player-name-suggestions').innerHTML = '';
     playerNameFlow = options.mode === 'result' ? options : { mode: 'ranking' };
     const isResultEntry = playerNameFlow.mode === 'result';
+    const hasRegisteredName = Boolean(isResultEntry && currentPlayerName);
+    input.readOnly = hasRegisteredName;
     document.getElementById('player-name-title').innerText = isResultEntry ? 'RANKING ENTRY' : 'PLAYER NAME';
     const prompt = document.getElementById('player-name-prompt');
     prompt.classList.toggle('hidden', !isResultEntry);
     prompt.innerText = isResultEntry
-        ? `Lv${playerNameFlow.result.level} / ${formatGameScore(playerNameFlow.result.score)}点を登録します`
+        ? `${hasRegisteredName ? `PLAYER: ${currentPlayerName}` : 'ユーザー名を登録してください'}\nLv${playerNameFlow.result.level} / ${formatGameScore(playerNameFlow.result.score)}点`
         : '';
     document.getElementById('player-name-actions').classList.toggle('result-entry-actions', isResultEntry);
-    document.getElementById('player-name-save-btn').innerText = isResultEntry ? 'この名前で登録' : 'この名前にする';
-    document.getElementById('player-name-cancel-btn').innerText = isResultEntry ? '登録しない' : '戻る';
+    document.getElementById('player-name-save-btn').innerText = isResultEntry ? 'ランキング登録して次へ' : 'この名前にする';
+    document.getElementById('player-name-cancel-btn').classList.toggle('hidden', isResultEntry);
+    document.getElementById('player-name-cancel-btn').innerText = '戻る';
     changeScreen('PLAYER_NAME');
-    setTimeout(() => input.focus(), 50);
+    if (!hasRegisteredName) setTimeout(() => input.focus(), 50);
 }
 
 function openRankingResultNameScreen(result, options = {}) {
@@ -117,7 +124,8 @@ async function submitPlayerName(inputValue) {
             method: 'POST',
             body: JSON.stringify({ deviceId: data.deviceId, playerName })
         });
-        saveRegisteredPlayerName(response.playerName, response.monthKey);
+        saveRegisteredPlayerName(response.playerName);
+        playerNameVerified = true;
         error.innerText = '';
         if (playerNameFlow?.mode === 'result') {
             const completedFlow = playerNameFlow;
@@ -133,10 +141,27 @@ async function submitPlayerName(inputValue) {
             changeScreen('RANKING');
         }
     } catch (apiError) {
-        error.innerText = apiError.status === 409
-            ? 'その名前は今月すでに使われています'
-            : '名前を登録できませんでした。通信を確認してください';
-        renderNameSuggestions(apiError.suggestions || []);
+        const isInputError = apiError.status >= 400 && apiError.status < 500 && apiError.status !== 429;
+        if (isInputError) {
+            error.innerText = apiError.status === 409
+                ? 'その名前はすでに使われています'
+                : '名前を確認してください';
+            renderNameSuggestions(apiError.suggestions || []);
+        } else if (playerNameFlow?.mode === 'result') {
+            const completedFlow = playerNameFlow;
+            error.innerText = '自動ユーザー名で送信中...';
+            const submitted = await submitCurrentRankingResult(completedFlow.result);
+            if (submitted) {
+                playerNameFlow = null;
+                if (typeof completedFlow.onComplete === 'function') completedFlow.onComplete();
+            } else {
+                error.innerText = '今回はランキング通信の対象外です';
+                playerNameFlow = null;
+                if (typeof completedFlow.onComplete === 'function') completedFlow.onComplete();
+            }
+        } else {
+            error.innerText = '名前を登録できませんでした。通信を確認してください';
+        }
     } finally {
         saveButton.disabled = false;
     }
@@ -152,7 +177,7 @@ function createRankingRow(entry, isOwn = false) {
 async function refreshRankingScreen() {
     await reclaimSavedPlayerName();
     updateRankingPlayerName();
-    document.getElementById('ranking-month').innerText = formatRankingMonth();
+    document.getElementById('ranking-scope').innerText = 'ALL-TIME TOP 100';
     document.getElementById('ranking-score-tab').classList.toggle('active', currentRankingType === 'score');
     document.getElementById('ranking-level-tab').classList.toggle('active', currentRankingType === 'level');
     const list = document.getElementById('ranking-list');
@@ -171,9 +196,9 @@ async function refreshRankingScreen() {
         const query = new URLSearchParams({ type: currentRankingType, deviceId: data.deviceId });
         const response = await requestRankingApi(`/api/rankings?${query}`);
         message.classList.toggle('hidden', response.entries.length > 0);
-        if (response.entries.length === 0) message.innerText = '今月の記録はまだありません';
+        if (response.entries.length === 0) message.innerText = 'まだ記録はありません';
         response.entries.forEach(entry => list.appendChild(createRankingRow(entry, entry.isOwn)));
-        if (response.ownEntry && !response.ownEntry.inTop30) {
+        if (response.ownEntry && !response.ownEntry.inTop100) {
             ownRow.innerHTML = '';
             ownRow.appendChild(createRankingRow(response.ownEntry, true));
             ownRow.classList.remove('hidden');
@@ -219,7 +244,11 @@ async function retryPendingRankingSubmissions() {
     const pending = loadPlayerData().pendingSubmissions;
     for (const submission of pending) {
         try {
-            await sendRankingResult(submission);
+            const response = await sendRankingResult(submission);
+            if (response.playerName) {
+                saveRegisteredPlayerName(response.playerName);
+                playerNameVerified = true;
+            }
         } catch (error) {
             if (error.status >= 400 && error.status < 500 && error.status !== 429) {
                 removePendingSubmission(submission.playToken);
@@ -231,13 +260,8 @@ async function retryPendingRankingSubmissions() {
 async function submitCurrentRankingResult(result) {
     const status = document.getElementById('result-ranking-status');
     const data = loadPlayerData();
-    if (result.score < MIN_RANKING_SCORE) {
-        status.innerText = `ランキングは${formatGameScore(MIN_RANKING_SCORE)}点以上から登録できます`;
-        status.classList.remove('hidden');
-        return false;
-    }
-    if (!getCurrentPlayerName()) {
-        status.innerText = '名前登録後のプレイからランキング対象';
+    if (Number(result.clearedStages) < 1 || result.level < 1) {
+        status.innerText = 'ランキングは1ステージ以上クリアすると登録できます';
         status.classList.remove('hidden');
         return false;
     }
@@ -255,18 +279,41 @@ async function submitCurrentRankingResult(result) {
     };
     activePlayToken = null;
     result.rankingFinalized = true;
+    rememberRankingSubmission(result);
     queuePendingSubmission(submission);
-    status.innerText = '月間ランキングへ送信中...';
+    status.innerText = '歴代ランキングへ送信中...';
     status.classList.remove('hidden');
     try {
         const response = await sendRankingResult(submission);
+        if (response.playerName) {
+            saveRegisteredPlayerName(response.playerName);
+            playerNameVerified = true;
+        }
         result.scoreRank = response.scoreRank;
         result.levelRank = response.levelRank;
-        status.innerText = `月間 SCORE ${response.scoreRank}位 / LEVEL ${response.levelRank}位`;
+        status.innerText = `歴代 SCORE ${response.scoreRank}位 / LEVEL ${response.levelRank}位`;
     } catch (error) {
         status.innerText = '通信後にランキング送信を再試行します';
     }
     return true;
+}
+
+async function submitRankingEntry() {
+    if (playerNameFlow?.mode !== 'result' || !getCurrentPlayerName()) {
+        return submitPlayerName(document.getElementById('player-name-input').value);
+    }
+    const completedFlow = playerNameFlow;
+    const saveButton = document.getElementById('player-name-save-btn');
+    const error = document.getElementById('player-name-error');
+    saveButton.disabled = true;
+    error.innerText = '送信中...';
+    const submitted = await submitCurrentRankingResult(completedFlow.result);
+    saveButton.disabled = false;
+    if (!submitted) {
+        error.innerText = '今回はランキング通信の対象外です';
+    }
+    playerNameFlow = null;
+    if (typeof completedFlow.onComplete === 'function') completedFlow.onComplete();
 }
 
 function cancelPlayerNameFlow() {
@@ -303,6 +350,6 @@ document.getElementById('player-name-input').addEventListener('input', event => 
     if (event.target.value !== normalized) event.target.value = normalized;
 });
 document.getElementById('player-name-save-btn').onclick = () => {
-    submitPlayerName(document.getElementById('player-name-input').value);
+    return submitRankingEntry();
 };
 document.getElementById('player-name-cancel-btn').onclick = cancelPlayerNameFlow;
