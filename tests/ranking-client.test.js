@@ -54,7 +54,6 @@ const sandbox = {
     Promise,
     URLSearchParams,
     MAX_PLAYABLE_LEVEL: 100,
-    MIN_RANKING_SCORE: 5000,
     window: {
         localStorage: {
             getItem: key => storage.has(key) ? storage.get(key) : null,
@@ -120,7 +119,7 @@ load('js/ranking.js');
     vm.runInContext(`
         globalThis.resultFlowCompleted = false;
         openRankingResultNameScreen(
-            { score: 12400, level: 9, bestScore: 12400 },
+            { score: 12400, level: 9, clearedStages: 1, bestScore: 12400 },
             { onComplete: () => { globalThis.resultFlowCompleted = true; } }
         );
     `, sandbox);
@@ -150,19 +149,24 @@ load('js/ranking.js');
     assert.equal(getElement('ranking-player-name').innerText, 'ALT1');
 
     assert.equal(
-        vm.runInContext(`shouldOfferRankingEntry({ score: 9000, level: 8, isNewScore: false, isNewLevel: false })`, sandbox),
+        vm.runInContext(`shouldOfferRankingEntry({ score: 9000, level: 8, clearedStages: 1, isNewRankingScore: false, isNewRankingLevel: false })`, sandbox),
         false,
         'an existing player does not see the entry screen for a lower result'
     );
     assert.equal(
-        vm.runInContext(`shouldOfferRankingEntry({ score: 13000, level: 8, isNewScore: true, isNewLevel: false })`, sandbox),
+        vm.runInContext(`shouldOfferRankingEntry({ score: 13000, level: 8, clearedStages: 1, isNewRankingScore: true, isNewRankingLevel: false })`, sandbox),
         true,
         'a new best score can be submitted'
     );
     assert.equal(
-        vm.runInContext(`shouldOfferRankingEntry({ score: 9000, level: 10, isNewScore: false, isNewLevel: true })`, sandbox),
+        vm.runInContext(`shouldOfferRankingEntry({ score: 9000, level: 10, clearedStages: 1, isNewRankingScore: false, isNewRankingLevel: true })`, sandbox),
         true,
         'a new best level can be submitted even if the score is lower'
+    );
+    assert.equal(
+        vm.runInContext(`shouldOfferRankingEntry({ score: 50000, level: 0, clearedStages: 0, isNewRankingScore: true, isNewRankingLevel: false })`, sandbox),
+        false,
+        'a high score without a stage clear is not eligible'
     );
 
     await vm.runInContext(`
@@ -178,7 +182,7 @@ load('js/ranking.js');
     vm.runInContext(`
         globalThis.automaticNameFlowCompleted = false;
         openRankingResultNameScreen(
-            { score: 15000, level: 11, bestScore: 15000, isNewScore: true, isNewLevel: true },
+            { score: 15000, level: 11, clearedStages: 1, bestScore: 15000, isNewScore: true, isNewLevel: true },
             { onComplete: () => { globalThis.automaticNameFlowCompleted = true; } }
         );
         document.getElementById('player-name-input').value = 'ERROR';

@@ -260,8 +260,8 @@ async function retryPendingRankingSubmissions() {
 async function submitCurrentRankingResult(result) {
     const status = document.getElementById('result-ranking-status');
     const data = loadPlayerData();
-    if (result.score < MIN_RANKING_SCORE) {
-        status.innerText = `ランキングは${formatGameScore(MIN_RANKING_SCORE)}点以上から登録できます`;
+    if (Number(result.clearedStages) < 1 || result.level < 1) {
+        status.innerText = 'ランキングは1ステージ以上クリアすると登録できます';
         status.classList.remove('hidden');
         return false;
     }
@@ -279,6 +279,7 @@ async function submitCurrentRankingResult(result) {
     };
     activePlayToken = null;
     result.rankingFinalized = true;
+    rememberRankingSubmission(result);
     queuePendingSubmission(submission);
     status.innerText = '歴代ランキングへ送信中...';
     status.classList.remove('hidden');

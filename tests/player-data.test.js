@@ -34,6 +34,19 @@ const sandbox = {
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.join(root, 'js/player-data.js'), 'utf8'), sandbox, { filename: 'js/player-data.js' });
 
+storage.set('bugBeatBlocksPlayerData', JSON.stringify({
+    version: 2,
+    deviceId: 'legacy-device',
+    playerName: 'OLD1',
+    allTime: { score: 9999, level: 30 },
+    monthly: { monthKey: '2026-09', score: 9999, level: 30 },
+    pendingSubmissions: []
+}));
+const migratedLegacyData = vm.runInContext('loadPlayerData()', sandbox);
+assert.equal(migratedLegacyData.allTime.score, 9999);
+assert.equal(migratedLegacyData.allTime.level, 0, 'legacy reached levels are reset because they were not verified clears');
+storage.clear();
+
 vm.runInContext(`
     const first = recordLocalResult(1200, 8);
     assert.equal(first.isNewScore, true);
@@ -60,6 +73,21 @@ vm.runInContext(`
     saveRegisteredPlayerName('MRS1', getJstMonthKey());
     assert.equal(getCurrentPlayerName(), 'MRS1');
 
+    const eligible = recordLocalResult(1700, 9, 1);
+    assert.equal(eligible.isNewRankingScore, true);
+    assert.equal(eligible.isNewRankingLevel, true);
+    assert.equal(shouldOfferRankingEntry(eligible), true);
+    rememberRankingSubmission(eligible);
+    const repeated = recordLocalResult(1700, 9, 1);
+    assert.equal(repeated.isNewRankingScore, false);
+    assert.equal(repeated.isNewRankingLevel, false);
+    assert.equal(shouldOfferRankingEntry(repeated), false);
+
+    const noClear = recordLocalResult(5000, 0, 0);
+    assert.equal(noClear.level, 0);
+    assert.equal(noClear.clearedStages, 0);
+    assert.equal(shouldOfferRankingEntry(noClear), false);
+
     queuePendingSubmission({ playToken: 'abc', score: 10, level: 2 });
     queuePendingSubmission({ playToken: 'abc', score: 20, level: 3 });
     assert.equal(loadPlayerData().pendingSubmissions.length, 1);
@@ -72,6 +100,7 @@ vm.runInContext(`
     const result = await vm.runInContext(`shareGameResult({ score: 1500, level: 8, bestScore: 1500, scoreRank: 4 })`, sandbox);
     assert.equal(result, 'copied');
     assert.match(sandbox.copiedText, /歴代ハイスコア順位：4位/);
+    assert.match(sandbox.copiedText, /クリアレベル：Lv8/);
     assert.match(sandbox.copiedText, /https:\/\/example.com\/game/);
     console.log('player-data tests passed');
 })().catch(error => {

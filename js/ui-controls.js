@@ -67,6 +67,7 @@ function changeScreen(state, options = {}) {
         document.getElementById('pause-screen').classList.remove('hidden');
     } else if (state === 'GAMEOVER' || state === 'STAGECLEAR') {
         if (state === 'STAGECLEAR') {
+            markStageCleared(selectedLevel);
             const unlockedLevel = getNextLevel(selectedLevel);
             if (unlockedLevel !== null) saveHighestEndlessLevel(unlockedLevel);
         }
@@ -82,15 +83,16 @@ function changeScreen(state, options = {}) {
         overlaySub.innerText = isFinalLevelClear ? 'ALL 100 LEVELS CLEARED!' : '';
         overlaySub.classList.toggle('hidden', !isFinalLevelClear);
         const isFinalResult = state === 'GAMEOVER' || isFinalLevelClear;
-        const result = options.result || (isFinalResult ? recordLocalResult(score, selectedLevel) : {
+        const result = options.result || (isFinalResult ? recordLocalResult(score, highestClearedLevelThisRun, clearedStagesThisRun) : {
             score,
             level: selectedLevel,
+            clearedStages: clearedStagesThisRun,
             bestScore: loadPlayerData().allTime.score,
             isNewScore: false,
             isNewLevel: false
         });
         window.currentGameResult = result;
-        document.getElementById('result-level').innerText = `Lv${result.level}`;
+        document.getElementById('result-level').innerText = result.level > 0 ? `Lv${result.level}` : '―';
         document.getElementById('result-score').innerText = formatGameScore(result.score);
         document.getElementById('result-best-score').innerText = formatGameScore(result.bestScore);
         document.getElementById('result-best-row').classList.toggle('hidden', !isFinalResult);
@@ -99,8 +101,8 @@ function changeScreen(state, options = {}) {
         const rankingStatus = document.getElementById('result-ranking-status');
         rankingStatus.classList.toggle('hidden', state !== 'GAMEOVER');
         if (state === 'GAMEOVER') {
-            if (result.score < MIN_RANKING_SCORE) {
-                rankingStatus.innerText = `${formatGameScore(MIN_RANKING_SCORE)}点以上でランキング登録できます`;
+            if (result.clearedStages < 1) {
+                rankingStatus.innerText = '1ステージ以上クリアするとランキング登録できます';
             } else if (shouldOfferRankingEntry(result)) {
                 rankingStatus.innerText = 'リトライまたはタイトルに戻る時にランキング登録できます';
             } else {
@@ -129,6 +131,7 @@ function buildLevelGrid() {
         btn.onclick = () => {
             selectedLevel = i;
             score = 0;
+            resetRunProgress();
             startOnlinePlay();
             setupStage(selectedLevel);
             changeScreen('PLAYING');
@@ -170,6 +173,7 @@ document.getElementById('endless-continue-btn').onclick = () => {
     if (savedLevel === null) return;
     selectedLevel = savedLevel;
     score = 0;
+    resetRunProgress();
     startOnlinePlay();
     setupStage(selectedLevel);
     changeScreen('PLAYING');
@@ -188,6 +192,7 @@ document.getElementById('back-title-btn').onclick = () => changeScreen('TITLE');
 function restartCurrentLevel() {
     discardActiveRankingPlay();
     score = 0;
+    resetRunProgress();
     startOnlinePlay();
     setupStage(selectedLevel);
     changeScreen('PLAYING');
@@ -200,7 +205,7 @@ function returnToTitleFromPlay() {
 }
 
 function registerCurrentRunBefore(onComplete) {
-    const result = recordLocalResult(score, selectedLevel);
+    const result = recordLocalResult(score, highestClearedLevelThisRun, clearedStagesThisRun);
     window.currentGameResult = result;
     if (!shouldOfferRankingEntry(result)) {
         onComplete();

@@ -41,6 +41,7 @@ class D1Mock {
         this.database.exec('PRAGMA foreign_keys = ON');
         this.database.exec(fs.readFileSync(path.join(root, 'migrations/0001_monthly_rankings.sql'), 'utf8'));
         this.database.exec(fs.readFileSync(path.join(root, 'migrations/0002_all_time_rankings.sql'), 'utf8'));
+        this.database.exec(fs.readFileSync(path.join(root, 'migrations/0003_require_stage_clear.sql'), 'utf8'));
     }
 
     prepare(sql) {
@@ -82,18 +83,16 @@ async function main() {
         '2026-09', 'legacy-device', 12000, 10, 10, 12000, 210, 210, 210
     );
     migrationDb.exec(fs.readFileSync(path.join(root, 'migrations/0002_all_time_rankings.sql'), 'utf8'));
+    migrationDb.exec(fs.readFileSync(path.join(root, 'migrations/0003_require_stage_clear.sql'), 'utf8'));
     assert.equal(
         migrationDb.prepare('SELECT player_name FROM players WHERE device_hash = ?').get('legacy-device').player_name,
         'NEW1',
         'migration keeps the most recently used player name'
     );
-    const migratedRecord = migrationDb.prepare(
-        'SELECT best_score, score_run_level, best_level, level_run_score FROM all_time_records WHERE device_hash = ?'
-    ).get('legacy-device');
-    assert.deepEqual(
-        { ...migratedRecord },
-        { best_score: 15000, score_run_level: 8, best_level: 10, level_run_score: 12000 },
-        'migration combines the historical best score and best level'
+    assert.equal(
+        migrationDb.prepare('SELECT COUNT(*) AS count FROM all_time_records').get().count,
+        0,
+        'unverifiable pre-clear-requirement ranking records are reset'
     );
     migrationDb.close();
 
@@ -250,9 +249,14 @@ async function main() {
 
     const result1 = { deviceId: device1, playToken: start1.data.playToken, score: 10000, level: 5 };
     const result2 = { deviceId: device2, playToken: start2.data.playToken, score: 12000, level: 4 };
-    response = await api('records', { method: 'POST', body: { ...result1, score: 4999 } });
-    assert.equal(response.status, 422);
-    assert.equal(response.data.code, 'MIN_SCORE_REQUIRED');
+    response = await api('records', { method: 'POST', body: { ...result1, score: 100 } });
+    assert.equal(response.status, 200, 'a score below 5000 is eligible after clearing a stage');
+    const start1Upgrade = await api('play/start', {
+        method: 'POST',
+        body: { deviceId: device1 },
+        deviceIp: '192.0.2.1'
+    });
+    result1.playToken = start1Upgrade.data.playToken;
     response = await api('records', { method: 'POST', body: result1 });
     assert.equal(response.status, 200);
     response = await api('records', { method: 'POST', body: result2 });
@@ -272,6 +276,18 @@ async function main() {
     assert.equal(response.status, 200, 'same result submission is idempotent');
     response = await api('records', { method: 'POST', body: { ...result1, score: 9999 } });
     assert.equal(response.status, 409, 'used play token cannot submit another result');
+
+    const noClearStart = await api('play/start', {
+        method: 'POST',
+        body: { deviceId: device1 },
+        deviceIp: '192.0.2.1'
+    });
+    response = await api('records', {
+        method: 'POST',
+        body: { deviceId: device1, playToken: noClearStart.data.playToken, score: 50000, level: 0 }
+    });
+    assert.equal(response.status, 400);
+    assert.equal(response.data.code, 'INVALID_RESULT', 'a run without a cleared stage cannot be ranked');
 
     response = await api('player-name', { method: 'POST', body: { deviceId: device1, playerName: 'NEW1' } });
     assert.equal(response.status, 200);

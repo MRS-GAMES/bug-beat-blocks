@@ -2,7 +2,6 @@ const JSON_HEADERS = {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store'
 };
-const MIN_RANKING_SCORE = 5000;
 const MAX_RANKING_LEVEL = 100;
 
 function json(data, status = 200) {
@@ -217,13 +216,13 @@ const UPSERT_RECORD_SQL = `
 async function getRecordRanks(db, deviceHash) {
     const record = await db.prepare(
         `SELECT * FROM all_time_records
-         WHERE device_hash = ? AND best_score >= ${MIN_RANKING_SCORE}`
+         WHERE device_hash = ?`
     ).bind(deviceHash).first();
     if (!record) return { scoreRank: null, levelRank: null };
     const [scoreAhead, levelAhead] = await Promise.all([
         db.prepare(`
             SELECT COUNT(*) AS count FROM all_time_records
-            WHERE best_score >= ${MIN_RANKING_SCORE} AND (
+            WHERE (
                 best_score > ? OR
                 (best_score = ? AND score_run_level > ?) OR
                 (best_score = ? AND score_run_level = ? AND score_recorded_at < ?) OR
@@ -234,7 +233,7 @@ async function getRecordRanks(db, deviceHash) {
             record.best_score, record.score_run_level, record.score_recorded_at, deviceHash).first(),
         db.prepare(`
             SELECT COUNT(*) AS count FROM all_time_records
-            WHERE best_score >= ${MIN_RANKING_SCORE} AND (
+            WHERE (
                 best_level > ? OR
                 (best_level = ? AND level_run_score > ?) OR
                 (best_level = ? AND level_run_score = ? AND level_recorded_at < ?) OR
@@ -291,13 +290,6 @@ async function handleRecords(context) {
     if (!Number.isInteger(score) || score < 0 || score > 1000000000 || !Number.isInteger(level) || level < 1 || level > MAX_RANKING_LEVEL) {
         return json({ code: 'INVALID_RESULT', message: '記録の値が不正です' }, 400);
     }
-    if (score < MIN_RANKING_SCORE) {
-        return json({
-            code: 'MIN_SCORE_REQUIRED',
-            message: `ランキングは${MIN_RANKING_SCORE}点以上から登録できます`
-        }, 422);
-    }
-
     const db = context.env.RANKINGS_DB;
     const tokenHash = await sha256(body.playToken);
     const deviceHash = await sha256(body.deviceId);
@@ -342,7 +334,6 @@ async function handleRankings(context) {
             r.best_score, r.score_run_level, r.best_level, r.level_run_score
         FROM all_time_records r
         JOIN players p ON p.device_hash = r.device_hash
-        WHERE r.best_score >= ${MIN_RANKING_SCORE}
         ORDER BY ${order}
         LIMIT 100
     `).bind().all();
@@ -361,7 +352,7 @@ async function handleRankings(context) {
         const own = await context.env.RANKINGS_DB.prepare(`
             SELECT p.player_name, r.* FROM all_time_records r
             JOIN players p ON p.device_hash = r.device_hash
-            WHERE r.device_hash = ? AND r.best_score >= ${MIN_RANKING_SCORE}
+            WHERE r.device_hash = ?
         `).bind(deviceHash).first();
         if (own) {
             ownEntry = {

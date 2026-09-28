@@ -28,11 +28,12 @@ function createDeviceId() {
 
 function createDefaultPlayerData() {
     return {
-        version: 1,
+        version: 3,
         deviceId: createDeviceId(),
         playerName: '',
         playerNameMonth: '',
         allTime: { score: 0, level: 0 },
+        rankingBest: { score: 0, scoreRunLevel: 0, level: 0, levelRunScore: 0 },
         monthly: { monthKey: getJstMonthKey(), score: 0, level: 0 },
         pendingSubmissions: []
     };
@@ -41,22 +42,29 @@ function createDefaultPlayerData() {
 function normalizePlayerData(value) {
     const defaults = createDefaultPlayerData();
     if (!value || typeof value !== 'object') return defaults;
+    const storedVersion = Math.max(1, Number(value.version) || 1);
     const currentMonth = getJstMonthKey();
     const monthly = value.monthly?.monthKey === currentMonth
         ? {
             monthKey: currentMonth,
             score: Math.max(0, Number(value.monthly.score) || 0),
-            level: Math.max(0, Number(value.monthly.level) || 0)
+            level: storedVersion >= 3 ? Math.max(0, Number(value.monthly.level) || 0) : 0
         }
         : defaults.monthly;
     return {
-        version: 1,
+        version: 3,
         deviceId: typeof value.deviceId === 'string' && value.deviceId ? value.deviceId : defaults.deviceId,
         playerName: typeof value.playerName === 'string' ? value.playerName : '',
         playerNameMonth: typeof value.playerNameMonth === 'string' ? value.playerNameMonth : '',
         allTime: {
             score: Math.max(0, Number(value.allTime?.score) || 0),
-            level: Math.max(0, Number(value.allTime?.level) || 0)
+            level: storedVersion >= 3 ? Math.max(0, Number(value.allTime?.level) || 0) : 0
+        },
+        rankingBest: {
+            score: storedVersion >= 3 ? Math.max(0, Number(value.rankingBest?.score) || 0) : 0,
+            scoreRunLevel: storedVersion >= 3 ? Math.max(0, Number(value.rankingBest?.scoreRunLevel) || 0) : 0,
+            level: storedVersion >= 3 ? Math.max(0, Number(value.rankingBest?.level) || 0) : 0,
+            levelRunScore: storedVersion >= 3 ? Math.max(0, Number(value.rankingBest?.levelRunScore) || 0) : 0
         },
         monthly,
         pendingSubmissions: Array.isArray(value.pendingSubmissions) ? value.pendingSubmissions.slice(-5) : []
@@ -96,9 +104,34 @@ function getCurrentPlayerName() {
 }
 
 function shouldOfferRankingEntry(result) {
-    if (!result || result.rankingFinalized || result.score < MIN_RANKING_SCORE) return false;
+    if (!result || result.rankingFinalized || Number(result.clearedStages) < 1) return false;
     if (!getCurrentPlayerName()) return true;
-    return Boolean(result.isNewScore || result.isNewLevel);
+    return Boolean(result.isNewRankingScore || result.isNewRankingLevel);
+}
+
+function isBetterRankingScore(score, level, rankingBest) {
+    return score > rankingBest.score
+        || (score === rankingBest.score && level > rankingBest.scoreRunLevel);
+}
+
+function isBetterRankingLevel(score, level, rankingBest) {
+    return level > rankingBest.level
+        || (level === rankingBest.level && score > rankingBest.levelRunScore);
+}
+
+function rememberRankingSubmission(result) {
+    const data = loadPlayerData();
+    const score = Math.max(0, Math.floor(Number(result.score) || 0));
+    const level = Math.max(1, Math.min(MAX_PLAYABLE_LEVEL, Math.floor(Number(result.level) || 1)));
+    if (isBetterRankingScore(score, level, data.rankingBest)) {
+        data.rankingBest.score = score;
+        data.rankingBest.scoreRunLevel = level;
+    }
+    if (isBetterRankingLevel(score, level, data.rankingBest)) {
+        data.rankingBest.level = level;
+        data.rankingBest.levelRunScore = score;
+    }
+    savePlayerData(data);
 }
 
 function queuePendingSubmission(submission) {
@@ -115,14 +148,20 @@ function removePendingSubmission(playToken) {
     savePlayerData(data);
 }
 
-function recordLocalResult(resultScore, reachedLevel) {
+function recordLocalResult(resultScore, clearedLevel, clearedStages = Number(clearedLevel) > 0 ? 1 : 0) {
     const data = loadPlayerData();
     const safeScore = Math.max(0, Math.floor(Number(resultScore) || 0));
-    const safeLevel = Math.max(1, Math.min(MAX_PLAYABLE_LEVEL, Math.floor(Number(reachedLevel) || 1)));
+    const safeLevel = Math.max(0, Math.min(MAX_PLAYABLE_LEVEL, Math.floor(Number(clearedLevel) || 0)));
+    const safeClearedStages = Math.max(0, Math.floor(Number(clearedStages) || 0));
+    const isRankingEligible = safeClearedStages >= 1 && safeLevel >= 1;
     const isNewScore = safeScore > data.allTime.score;
     const isNewLevel = safeLevel > data.allTime.level;
     const isNewMonthlyScore = safeScore > data.monthly.score;
     const isNewMonthlyLevel = safeLevel > data.monthly.level;
+    const isNewRankingScore = isRankingEligible
+        && isBetterRankingScore(safeScore, safeLevel, data.rankingBest);
+    const isNewRankingLevel = isRankingEligible
+        && isBetterRankingLevel(safeScore, safeLevel, data.rankingBest);
 
     data.allTime.score = Math.max(data.allTime.score, safeScore);
     data.allTime.level = Math.max(data.allTime.level, safeLevel);
@@ -133,12 +172,15 @@ function recordLocalResult(resultScore, reachedLevel) {
     return {
         score: safeScore,
         level: safeLevel,
+        clearedStages: safeClearedStages,
         bestScore: data.allTime.score,
         bestLevel: data.allTime.level,
         monthlyBestScore: data.monthly.score,
         monthlyBestLevel: data.monthly.level,
         isNewScore,
         isNewLevel,
+        isNewRankingScore,
+        isNewRankingLevel,
         isNewMonthlyScore,
         isNewMonthlyLevel
     };
@@ -152,7 +194,7 @@ function buildResultShareText(result) {
     const lines = [
         'BUG BEAT BLOCKS',
         '',
-        `到達レベル：Lv${result.level}`,
+        `クリアレベル：${result.level > 0 ? `Lv${result.level}` : 'なし'}`,
         `SCORE：${formatGameScore(result.score)}`,
         `自己ベスト：${formatGameScore(result.bestScore)}`
     ];
